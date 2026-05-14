@@ -1,0 +1,49 @@
+# ---- Python (service/) ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.uv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---- Node / UI (ui/) ----
+node_modules/
+dist/
+dist-electron/
+.vite/
+*.tsbuildinfo
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# ---- Models & data (large / generated artifacts) ----
+*.mlpackage/
+*.mlmodel
+*.onnx
+*.pt
+models/
+data/
+# Trained-model artifacts pulled back from the cluster (best.pt + args.yaml + results.csv +
+# requirements.lock). Versioned artifacts, never committed.
+artifacts/
+# Dataset archives staged locally for upload to the cluster (HERIDAL/SARD/VisDrone).
+# These are versioned artifacts, never committed (plan: weights/data live on the
+# cluster / as release artifacts, not in git).
+*.zip
+SARD/
+HERIDAL/
+VisDrone/
+datasets/
+
+# ---- OS / editor ----
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# ---- Stray non-project files ----
+cs1.pdf
+.gstack/
