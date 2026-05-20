@@ -4,3 +4,4 @@ Capture → detect → georeference pipeline for the HADES ground-control statio
 """
 
 __version__ = "0.0.0"
+# TODO(tw1): revisit
