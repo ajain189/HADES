@@ -271,3 +271,4 @@ stock YOLO11s to CoreML at {640, 960, 1280} (FP16, `ComputeUnits.all`) and measu
   dependency-group). The benchmark's stats/gate logic is offline-unit-tested; the ANE
   measurement is a manual `@pytest.mark.ane` run. numpy is pinned `<2` for the spike —
   coremltools 9.0 crashes the export on numpy 2.x (`tasks/lessons.md`).
+<!-- TODO(tw2): revisit -->
