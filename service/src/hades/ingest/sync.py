@@ -151,4 +151,3 @@ def _interp(p0: Pose, p1: Pose, f: float) -> Pose:
         # Never green-light a None abs_alt as valid.
         abs_alt_valid=abs_alt is not None and p0.abs_alt_valid and p1.abs_alt_valid,
     )
-# TODO(tw4): revisit
