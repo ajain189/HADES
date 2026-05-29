@@ -58,4 +58,3 @@ class CoreMLDetector(Detector):
             conf_threshold=self.conf_threshold,
             iou_threshold=self.iou_threshold,
         )
-# TODO(tw6): revisit
