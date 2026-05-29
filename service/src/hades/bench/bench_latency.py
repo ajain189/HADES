@@ -169,3 +169,175 @@ def benchmark_resolution(
     latencies = time_inference(
         infer, warmup_frames=warmup_frames, measure_frames=measure_frames
     )
+    return summarize(resolution, latencies)
+
+
+def run_sweep(
+    resolutions: Sequence[int] = DEFAULT_RESOLUTIONS,
+    models_dir: str | Path = DEFAULT_OUT_DIR,
+    *,
+    warmup_frames: int = DEFAULT_WARMUP_FRAMES,
+    measure_frames: int = DEFAULT_MEASURE_FRAMES,
+) -> list[Decision]:
+    """Benchmark each resolution in turn. Returns one Decision per resolution."""
+    return [
+        benchmark_resolution(
+            r, models_dir, warmup_frames=warmup_frames, measure_frames=measure_frames
+        )
+        for r in resolutions
+    ]
+
+
+def _load_mlmodel(path: Path):
+    """Load a `.mlpackage` with ComputeUnits.all (ANE/GPU/CPU placement)."""
+    from coremltools import ComputeUnit
+    from coremltools.models import MLModel
+
+    return MLModel(str(path), compute_units=ComputeUnit.ALL)
+
+
+def _coreml_image_input_name(model) -> str:
+    """First input feature name from the CoreML spec (the image input)."""
+    return model.get_spec().description.input[0].name
+
+
+# A run on the ANE must be meaningfully faster than CPU_ONLY; below this speedup
+# we can't claim the Neural Engine actually served the model (Core ML places
+# per-op and silently falls back to GPU/CPU). 2× is a deliberately loose floor —
+# observed speedup is ~5.6× — chosen to flag a real CPU fallback, not noise.
+ANE_SPEEDUP_FLOOR = 2.0
+
+
+@dataclass(frozen=True)
+class AnePlacement:
+    """Result of the ANE-placement check (does `ComputeUnits.all` use the ANE?)."""
+
+    resolution: int
+    cpu_only_ms: float
+    all_ms: float
+    speedup: float
+    ane_served: bool
+
+
+def assess_ane_placement(resolution: int, cpu_only_ms: float, all_ms: float) -> AnePlacement:
+    """Decide whether `ComputeUnits.all` was ANE-served, from the two medians.
+
+    Pure (no ML): `ALL` tracking `CPU_ONLY` means Core ML fell back to CPU; `ALL`
+    being ≥`ANE_SPEEDUP_FLOOR`× faster means the ANE (or GPU) actually served it.
+    Split out so the verdict logic is unit-tested without hardware.
+    """
+    if cpu_only_ms <= 0 or all_ms <= 0:
+        raise ValueError("latencies must be positive (ms)")
+    speedup = cpu_only_ms / all_ms
+    return AnePlacement(
+        resolution=resolution,
+        cpu_only_ms=cpu_only_ms,
+        all_ms=all_ms,
+        speedup=speedup,
+        ane_served=speedup >= ANE_SPEEDUP_FLOOR,
+    )
+
+
+def verify_ane_placement(
+    resolution: int,
+    models_dir: str | Path = DEFAULT_OUT_DIR,
+    *,
+    warmup_frames: int = DEFAULT_WARMUP_FRAMES,
+    measure_frames: int = 80,
+) -> AnePlacement:
+    """Benchmark the same model under `CPU_ONLY` then `ALL`; assess placement.
+
+    This is the load-bearing check for the whole spike: a fast number is only a
+    valid ANE number if the ANE actually served it. Lazy-imports CoreML.
+    """
+    import numpy as np
+    from coremltools import ComputeUnit
+    from coremltools.models import MLModel
+    from PIL import Image
+
+    path = artifact_path(models_dir, resolution)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"missing artifact {path} — run `hades-export-coreml --res {resolution}` first"
+        )
+    rng = np.random.default_rng(0)
+    frame = Image.fromarray(
+        rng.integers(0, 256, size=(resolution, resolution, 3), dtype=np.uint8), mode="RGB"
+    )
+
+    def _median_ms(compute_unit) -> float:
+        model = MLModel(str(path), compute_units=compute_unit)
+        name = model.get_spec().description.input[0].name
+        lat = time_inference(
+            lambda: model.predict({name: frame}),
+            warmup_frames=warmup_frames,
+            measure_frames=measure_frames,
+        )
+        return _percentile(sorted(lat), 50.0)
+
+    cpu_only = _median_ms(ComputeUnit.CPU_ONLY)
+    all_units = _median_ms(ComputeUnit.ALL)
+    return assess_ane_placement(resolution, cpu_only, all_units)
+
+
+def format_table(decisions: Sequence[Decision]) -> str:
+    """Render results as a markdown table — pasted straight into the results doc."""
+    header = (
+        "| Resolution | median ms | p90 ms | mean ms | fps (median) | ≥10fps? |\n"
+        "|---:|---:|---:|---:|---:|:---:|"
+    )
+    rows = [
+        f"| {d.resolution} | {d.median_ms:.1f} | {d.p90_ms:.1f} | {d.mean_ms:.1f} "
+        f"| {d.fps_median:.1f} | {'✅' if d.meets_gate else '❌'} |"
+        for d in decisions
+    ]
+    return "\n".join([header, *rows])
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="hades-bench-latency",
+        description="Benchmark CoreML YOLO11s ANE latency per resolution (Phase 1.5 spike).",
+    )
+    parser.add_argument(
+        "--res", type=int, nargs="+", default=list(DEFAULT_RESOLUTIONS),
+        help="resolutions to benchmark (default: 640 960 1280)",
+    )
+    parser.add_argument("--models", default=DEFAULT_OUT_DIR, help="dir holding .mlpackage artifacts")
+    parser.add_argument("--warmup", type=int, default=DEFAULT_WARMUP_FRAMES, help="warm-up frames")
+    parser.add_argument(
+        "--frames", type=int, default=DEFAULT_MEASURE_FRAMES, help="timed frames per resolution"
+    )
+    parser.add_argument(
+        "--verify-ane",
+        action="store_true",
+        help="also check the ANE actually serves ComputeUnits.all (CPU_ONLY vs ALL speedup)",
+    )
+    args = parser.parse_args(argv)
+
+    decisions = run_sweep(
+        args.res, args.models, warmup_frames=args.warmup, measure_frames=args.frames
+    )
+    feasible = [d.resolution for d in decisions if d.meets_gate]
+    print(format_table(decisions))
+    print()
+    print(f"feasible (>= {FPS_GATE:.0f}fps) resolutions: {feasible or 'NONE'}")
+
+    if args.verify_ane:
+        # Verify at the smallest resolution — placement is per-graph, not per-size,
+        # so one check confirms the model runs on the ANE rather than CPU.
+        res = min(args.res)
+        p = verify_ane_placement(res, args.models, warmup_frames=args.warmup)
+        verdict = "ANE-served ✅" if p.ane_served else "CPU FALLBACK ⚠"
+        print()
+        print(
+            f"ANE placement @ {res}: CPU_ONLY={p.cpu_only_ms:.1f}ms ALL={p.all_ms:.1f}ms "
+            f"speedup={p.speedup:.1f}x -> {verdict}"
+        )
+        if not p.ane_served:
+            return 1  # a fast latency number that's actually CPU is a failed spike
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
