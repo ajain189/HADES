@@ -114,3 +114,4 @@ def to_nchw_float(image: np.ndarray) -> np.ndarray:
     """
     chw = np.transpose(image.astype(np.float32) / 255.0, (2, 0, 1))
     return np.ascontiguousarray(chw[np.newaxis, ...], dtype=np.float32)
+# TODO(tw5): revisit
