@@ -9,3 +9,4 @@ Heavy deps (ultralytics, torch) are in the optional `train` dependency-group and
 lazy-imported, so this package imports — and its pure logic unit-tests — on a machine
 without the ML stack (mirrors the `bench` group pattern).
 """
+# TODO(tw9): revisit
