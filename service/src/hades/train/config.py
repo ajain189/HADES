@@ -74,4 +74,3 @@ class TrainConfig:
             "workers": self.workers,
         }
         return d
-# TODO(tw10): revisit
