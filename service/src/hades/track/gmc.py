@@ -78,3 +78,83 @@ class GMC:
         self.min_features = min_features
         self.min_inliers = min_inliers
         self.good_inliers = good_inliers
+        self._prev_gray: np.ndarray | None = None
+        # Pin RANSAC's RNG so the same frames give the same warp on CI every run.
+        cv2.setRNGSeed(0)
+
+    def reset(self) -> None:
+        """Drop previous-frame state (call on link-loss / resolution change)."""
+        self._prev_gray = None
+
+    def apply(self, frame: np.ndarray) -> GmcResult:
+        """Feed the next frame; estimate motion from the previous one.
+
+        Accepts an HxW grayscale or HxWx3 frame. The first call (or any call after a
+        reset / resolution change) primes state and returns the identity warp, ok=False.
+        """
+        gray = self._to_downscaled_gray(frame)
+
+        # First frame, or a resolution change → re-prime, no estimate possible yet.
+        if self._prev_gray is None or self._prev_gray.shape != gray.shape:
+            self._prev_gray = gray
+            return self._not_ok()
+
+        prev = self._prev_gray
+        self._prev_gray = gray
+
+        # Stage A — feature floor: catches the uniform/water frame before flow runs.
+        prev_pts = cv2.goodFeaturesToTrack(
+            prev, maxCorners=1000, qualityLevel=0.01, minDistance=1, blockSize=3
+        )
+        if prev_pts is None or len(prev_pts) < self.min_features:
+            return self._not_ok()
+
+        # Track those corners forward into the current frame with pyramidal LK.
+        curr_pts, status, _err = cv2.calcOpticalFlowPyrLK(
+            prev, gray, prev_pts, None, maxLevel=3
+        )
+        if curr_pts is None or status is None:
+            return self._not_ok()
+        keep = status.ravel().astype(bool)
+        prev_kept = prev_pts[keep].reshape(-1, 2)
+        curr_kept = curr_pts[keep].reshape(-1, 2)
+        if len(prev_kept) < self.min_features:
+            return self._not_ok()
+
+        # Estimate the partial-affine warp (prev→curr) with RANSAC.
+        warp_small, inliers = cv2.estimateAffinePartial2D(
+            prev_kept, curr_kept, method=cv2.RANSAC
+        )
+        n_inliers = int(inliers.sum()) if inliers is not None else 0
+
+        # Stage B — inlier floor: catches a degenerate fit that passed the feature floor.
+        if warp_small is None or n_inliers < self.min_inliers:
+            return self._not_ok()
+
+        warp = self._upscale_warp(warp_small)
+        confidence = min(1.0, n_inliers / float(self.good_inliers))
+        return GmcResult(warp=warp, confidence=confidence, ok=True, n_inliers=n_inliers)
+
+    def _to_downscaled_gray(self, frame: np.ndarray) -> np.ndarray:
+        gray = frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        if self.downscale > 1:
+            h, w = gray.shape[:2]
+            gray = cv2.resize(
+                gray, (w // self.downscale, h // self.downscale), interpolation=cv2.INTER_AREA
+            )
+        return np.ascontiguousarray(gray)
+
+    def _upscale_warp(self, warp_small: np.ndarray) -> np.ndarray:
+        """Map a warp estimated on the downscaled frame back to full resolution.
+
+        Rotation/scale (the 2×2 linear block) are scale-invariant; only the translation
+        column is in downscaled pixels and must be multiplied by the downscale factor.
+        """
+        warp = warp_small.astype(np.float64).copy()
+        warp[:, 2] *= self.downscale
+        return warp
+
+    def _not_ok(self) -> GmcResult:
+        return GmcResult(
+            warp=_IDENTITY_2x3.copy(), confidence=0.0, ok=False, n_inliers=0
+        )
