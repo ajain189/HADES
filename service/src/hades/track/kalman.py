@@ -67,3 +67,73 @@ class KalmanFilter:
         h = measurement[3]
         std = np.array(
             [
+                2 * _STD_WEIGHT_POSITION * h,
+                2 * _STD_WEIGHT_POSITION * h,
+                1e-2,
+                2 * _STD_WEIGHT_POSITION * h,
+                10 * _STD_WEIGHT_VELOCITY * h,
+                10 * _STD_WEIGHT_VELOCITY * h,
+                1e-5,
+                10 * _STD_WEIGHT_VELOCITY * h,
+            ]
+        )
+        covariance = np.diag(np.square(std))
+        return mean, covariance
+
+    def predict(
+        self, mean: np.ndarray, covariance: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Run the prediction step: advance state by one frame of constant velocity."""
+        h = mean[3]
+        std_pos = [
+            _STD_WEIGHT_POSITION * h,
+            _STD_WEIGHT_POSITION * h,
+            1e-2,
+            _STD_WEIGHT_POSITION * h,
+        ]
+        std_vel = [
+            _STD_WEIGHT_VELOCITY * h,
+            _STD_WEIGHT_VELOCITY * h,
+            1e-5,
+            _STD_WEIGHT_VELOCITY * h,
+        ]
+        motion_cov = np.diag(np.square(np.r_[std_pos, std_vel]))
+
+        mean = self._motion_mat @ mean
+        covariance = self._motion_mat @ covariance @ self._motion_mat.T + motion_cov
+        return mean, covariance
+
+    def project(
+        self, mean: np.ndarray, covariance: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Project state into measurement space (the 4 position dims) with its noise."""
+        h = mean[3]
+        std = [
+            _STD_WEIGHT_POSITION * h,
+            _STD_WEIGHT_POSITION * h,
+            1e-1,
+            _STD_WEIGHT_POSITION * h,
+        ]
+        innovation_cov = np.diag(np.square(std))
+
+        mean = self._update_mat @ mean
+        covariance = self._update_mat @ covariance @ self._update_mat.T
+        return mean, covariance + innovation_cov
+
+    def update(
+        self, mean: np.ndarray, covariance: np.ndarray, measurement: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Run the correction step against a new XYAH measurement."""
+        projected_mean, projected_cov = self.project(mean, covariance)
+
+        # Kalman gain via a Cholesky solve (numerically stabler than an explicit inverse).
+        chol_factor = np.linalg.cholesky(projected_cov)
+        kalman_gain = np.linalg.solve(
+            chol_factor.T,
+            np.linalg.solve(chol_factor, (covariance @ self._update_mat.T).T),
+        ).T
+        innovation = measurement - projected_mean
+
+        new_mean = mean + innovation @ kalman_gain.T
+        new_covariance = covariance - kalman_gain @ projected_cov @ kalman_gain.T
+        return new_mean, new_covariance
