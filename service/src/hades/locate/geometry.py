@@ -84,3 +84,89 @@ def _agl(pose: Pose, ground_elev: float, ground_elev_datum: str) -> float:
     # geoid; UNKNOWN is unknowable; an unrecognised/empty tag is not a real datum.)
     subtractable = {d for d in _KNOWN_DATUMS if d != "UNKNOWN"}
     if drone_datum != ground_elev_datum or drone_datum not in subtractable:
+        raise ValueError(
+            f"ray_to_ground: refusing to subtract across vertical datums "
+            f"(drone={drone_datum!r}, ground={ground_elev_datum!r}) — would inject a "
+            f"geoid/takeoff offset (DESIGN.md §3.5); only identical, non-UNKNOWN datums "
+            f"may be subtracted"
+        )
+    return pose.alt - ground_elev
+
+
+def ray_to_ground(
+    pose: Pose,
+    camera: CameraModel,
+    pixel: tuple[float, float],
+    ground_elev: float,
+    ground_elev_datum: str = "REL_TAKEOFF",
+) -> tuple[float, float]:
+    """Project one image pixel to a ground (lat, lon), WGS84 degrees (DESIGN.md §3.4).
+
+    Args:
+        pose: drone pose; needs a GPS fix (lat/lon) and full attitude (roll/pitch/yaw) —
+            a position-only pose is refused rather than projected as level/north.
+        camera: intrinsics + boresight (the fixed mount).
+        pixel: ``(u_px, v_px)`` in original-frame pixels (top-left origin, +x right/+y
+            down, §3.2).
+        ground_elev: operator-set ground-plane elevation, in `ground_elev_datum`.
+        ground_elev_datum: vertical datum of `ground_elev`; must be compatible with the
+            pose's `alt_datum` (see `_agl`).
+
+    Returns:
+        ``(lat, lon)`` degrees, WGS84, (lat, lon) order.
+
+    Raises:
+        ValueError: no GPS fix; missing attitude; mixed/unknown vertical datums;
+            non-positive AGL; or a ray at/above the horizon (the phantom-pin reject).
+    """
+    # Refuse rather than fabricate: no GPS origin, or a partial/None attitude.
+    if pose.lat is None or pose.lon is None or not pose.gps_valid:
+        raise ValueError("ray_to_ground: no GPS fix (lat/lon) — cannot set an ENU origin")
+    if pose.roll is None or pose.pitch is None or pose.yaw is None:
+        raise ValueError(
+            "ray_to_ground: pose attitude is None — refusing to assume level/north"
+        )
+
+    # A None check is not enough — a NaN/inf lat/alt/attitude/ground_elev would flow through
+    # `None`-only guards and out to a silent (nan, nan) pin (cos(nan)=nan, t=H/nan=nan). The
+    # cardinal silently-wrong-coordinate sin; refuse non-finite pose/ground inputs too.
+    finite_inputs = (
+        pose.lat, pose.lon, pose.alt, pose.roll, pose.pitch, pose.yaw, ground_elev
+    )
+    if not all(math.isfinite(v) for v in finite_inputs):
+        raise ValueError(
+            "ray_to_ground: non-finite pose/ground input (lat/lon/alt/attitude/ground_elev)"
+        )
+
+    height = _agl(pose, ground_elev, ground_elev_datum)
+    if height <= 0.0:
+        raise ValueError(
+            f"ray_to_ground: AGL must be positive (drone above ground), got {height:.2f} m"
+        )
+
+    # A non-finite pixel must not slip through: NaN fails `d_up >= 0` (so the horizon
+    # reject below wouldn't fire) and would yield a silent (nan, nan) coordinate that
+    # `fusable` then accepts (nan is not None) — the cardinal silently-wrong-pin sin.
+    if not (math.isfinite(pixel[0]) and math.isfinite(pixel[1])):
+        raise ValueError(f"ray_to_ground: non-finite pixel {pixel!r}")
+
+    # Optical-frame ray → active-rotate optical → body → ENU world.
+    ray_cam = camera.ray_cam(pixel[0], pixel[1])
+    d = R_world_body(pose.roll, pose.pitch, pose.yaw) @ camera.R_body_cam @ ray_cam
+    d_east, d_north, d_up = d[0], d[1], d[2]
+
+    # Ray must point toward the ground (down). A ray at/above the horizon would produce a
+    # phantom pin behind the drone (t≤0 or ∞) — REJECT (DESIGN.md §3.4). Strict `>=`.
+    if d_up >= 0.0:
+        raise ValueError(
+            "ray_to_ground: REJECT — ray points at/above the horizon (d_up >= 0); "
+            "no valid ground intersection"
+        )
+
+    # Drone at ENU (0,0,H); intersect the ground plane z=0: H + t·d_up = 0 → t = H/|d_up|.
+    t = -height / d_up
+    east, north = t * d_east, t * d_north
+
+    lat = pose.lat + north / _METERS_PER_DEG_LAT
+    lon = pose.lon + east / (_METERS_PER_DEG_LAT * np.cos(np.radians(pose.lat)))
+    return lat, lon
