@@ -46,3 +46,52 @@ class CameraModel:
 
     Args:
         fx, fy: focal lengths in pixels.
+        cx, cy: principal point in pixels.
+        mount: ``"nadir"`` or ``"forward"`` — selects the fixed boresight `R_body_cam`.
+        dist: radial/tangential distortion coeffs (OpenCV order); empty ⇒ pinhole.
+    """
+
+    fx: float
+    fy: float
+    cx: float
+    cy: float
+    mount: str = "nadir"
+    dist: tuple[float, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        if self.mount not in _MOUNTS:
+            raise ValueError(
+                f"unknown mount {self.mount!r}; expected one of {sorted(_MOUNTS)}"
+            )
+
+    @property
+    def K(self) -> np.ndarray:
+        """The 3×3 intrinsic matrix."""
+        return np.array(
+            [[self.fx, 0.0, self.cx], [0.0, self.fy, self.cy], [0.0, 0.0, 1.0]]
+        )
+
+    @property
+    def R_body_cam(self) -> np.ndarray:
+        """Boresight rotation CAMERA-OPTICAL → BODY-FRD for the configured mount."""
+        return _MOUNTS[self.mount].copy()
+
+    def ray_cam(self, u_px: float, v_px: float) -> np.ndarray:
+        """Optical-frame ray for a pixel: ``[(u−cx)/fx, (v−cy)/fy, 1]`` (+z into scene).
+
+        Distortion is removed first (identity for the pinhole v1 fixtures). The ray is
+        unnormalized — magnitude is irrelevant to the ground intersection.
+        """
+        u_u, v_u = self._undistort(u_px, v_px)
+        return np.array([(u_u - self.cx) / self.fx, (v_u - self.cy) / self.fy, 1.0])
+
+    def _undistort(self, u_px: float, v_px: float) -> tuple[float, float]:
+        # v1 fixtures are pinhole; a calibrated O4 lens model plugs in here later
+        # (cv2.undistortPoints) without changing any caller.
+        if not self.dist:
+            return u_px, v_px
+        import cv2  # lazy: only the distorted path needs opencv here
+
+        pts = np.array([[[u_px, v_px]]], dtype=np.float64)
+        undist = cv2.undistortPoints(pts, self.K, np.array(self.dist), P=self.K)
+        return float(undist[0, 0, 0]), float(undist[0, 0, 1])
