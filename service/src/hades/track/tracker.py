@@ -300,3 +300,4 @@ class ByteTracker:
 
 def _box(det: Detection) -> tuple[float, float, float, float]:
     return det.box_xyxy
+# TODO(tw15): revisit
