@@ -120,3 +120,125 @@ class MonteCarloUncertainty:
             try:
                 latlon = ray_to_ground(
                     sample_pose, camera, pixel=sample_pixel,
+                    ground_elev=ground_elev + rng.normal(0.0, m.sigma_h_m),
+                    ground_elev_datum=pose.alt_datum,
+                )
+            except ValueError:
+                rejected += 1  # above-horizon ray, etc. — a transparent reject (§4)
+                continue
+            enu = self._enu(origin, latlon)
+            if np.hypot(enu[0], enu[1]) > _MAX_GROUND_RANGE_M:
+                rejected += 1  # implausibly far -> a near-horizon blow-up, reject it
+                continue
+            pts.append(enu)
+
+        return self._summarize(np.array(pts), rejected)
+
+    # --- draw one perturbed (pose, pixel) ------------------------------------------
+
+    def _draw(
+        self,
+        pose: Pose,
+        pixel: tuple[float, float],
+        m: SensorErrorModel,
+        heading_bias: float,
+        rng: np.random.Generator,
+    ) -> tuple[Pose, tuple[float, float]]:
+        if m.gps_dist == "studentt" and m.gps_horiz_sigma_m > 0:
+            scale = m.gps_horiz_sigma_m * math.sqrt(
+                (m.gps_studentt_dof - 2.0) / m.gps_studentt_dof
+            )
+            de = float(rng.standard_t(m.gps_studentt_dof) * scale)
+            dn = float(rng.standard_t(m.gps_studentt_dof) * scale)
+        else:
+            de = float(rng.normal(0.0, m.gps_horiz_sigma_m))
+            dn = float(rng.normal(0.0, m.gps_horiz_sigma_m))
+        lat = pose.lat + dn / _M_PER_DEG_LAT
+        lon = pose.lon + de / (_M_PER_DEG_LAT * math.cos(math.radians(pose.lat)))
+        alt = pose.alt + float(rng.normal(0.0, m.gps_vert_sigma_m))
+
+        droll = float(rng.normal(0.0, m.roll_sigma_deg))
+        dpitch = float(rng.normal(0.0, m.pitch_sigma_deg))
+        # Heading = true + common-mode bias (shared) + per-draw jitter + boresight.
+        dyaw = (
+            heading_bias
+            + float(rng.normal(0.0, m.yaw_jitter_sigma_deg))
+            + float(rng.normal(0.0, m.boresight_sigma_deg))
+        )
+        sample_pose = Pose(
+            t=pose.t, lat=lat, lon=lon, alt=alt, alt_datum=pose.alt_datum,
+            roll=pose.roll + droll, pitch=pose.pitch + dpitch, yaw=pose.yaw + dyaw,
+            seq=pose.seq,
+        )
+        # The detection pixel (box bottom-center) also jitters; foot_bias_px is a systematic
+        # feet-vs-box-bottom offset on the v-axis.
+        du = float(rng.normal(0.0, m.pixel_sigma_px))
+        dv = float(rng.normal(m.foot_bias_px, m.pixel_sigma_px))
+        return sample_pose, (pixel[0] + du, pixel[1] + dv)
+
+    def _enu(self, origin: tuple[float, float], latlon: tuple[float, float]) -> np.ndarray:
+        north = (latlon[0] - origin[0]) * _M_PER_DEG_LAT
+        east = (latlon[1] - origin[1]) * _M_PER_DEG_LAT * math.cos(math.radians(origin[0]))
+        return np.array([east, north])
+
+    # --- summarize the cloud --------------------------------------------------------
+
+    def _summarize(self, pts: np.ndarray, rejected: int) -> UncertaintyResult:
+        n_used = len(pts)
+        total = n_used + rejected
+        reject_fraction = rejected / total if total else 1.0
+
+        if n_used < 2:
+            # Degenerate: nothing projected -> CUE_ONLY at the floor.
+            return UncertaintyResult(
+                cov=np.eye(2) * _CUE_FLOOR_RADIUS_M ** 2,
+                r95_m=_CUE_FLOOR_RADIUS_M,
+                semi_major_m=_CUE_FLOOR_RADIUS_M,
+                semi_minor_m=_CUE_FLOOR_RADIUS_M,
+                orientation_deg=0.0,
+                actionability_class="CUE_ONLY",
+                reject_fraction=reject_fraction,
+                floor_radius_m=_CUE_FLOOR_RADIUS_M,
+                coverage_of_own_r95=1.0,
+                n_used=n_used,
+            )
+
+        center = pts.mean(axis=0)
+        cov = np.cov(pts.T)  # 2x2 sample covariance
+        radii = np.hypot(pts[:, 0] - center[0], pts[:, 1] - center[1])
+        r95_empirical = float(np.quantile(radii, 0.95))
+
+        vals, vecs = np.linalg.eigh(cov)
+        vals = np.clip(vals, 0.0, None)
+        order = np.argsort(vals)[::-1]
+        major = _R95_SCALE * math.sqrt(vals[order[0]])
+        minor = _R95_SCALE * math.sqrt(vals[order[1]])
+        v = vecs[:, order[0]]
+        orient = math.degrees(math.atan2(v[1], v[0]))
+
+        # Near-horizon instability -> CUE_ONLY at a floor, never a tight false number (§4).
+        if reject_fraction > _REJECT_FRACTION_CUE:
+            r95 = max(r95_empirical, _CUE_FLOOR_RADIUS_M)
+            return UncertaintyResult(
+                cov=cov, r95_m=r95, semi_major_m=major, semi_minor_m=minor,
+                orientation_deg=orient, actionability_class="CUE_ONLY",
+                reject_fraction=reject_fraction, floor_radius_m=_CUE_FLOOR_RADIUS_M,
+                coverage_of_own_r95=float(np.mean(radii <= r95)), n_used=n_used,
+            )
+
+        cls = self._actionability(r95_empirical)
+        return UncertaintyResult(
+            cov=cov, r95_m=r95_empirical, semi_major_m=major, semi_minor_m=minor,
+            orientation_deg=orient, actionability_class=cls,
+            reject_fraction=reject_fraction, floor_radius_m=0.0,
+            coverage_of_own_r95=float(np.mean(radii <= r95_empirical)), n_used=n_used,
+        )
+
+    def _actionability(self, r95: float) -> str:
+        if r95 <= _PINPOINT_M:
+            return "PINPOINT"
+        if r95 <= _SWEEP_M:
+            return "SWEEP"
+        if r95 <= _AREA_M:
+            return "AREA"
+        return "CUE_ONLY"
