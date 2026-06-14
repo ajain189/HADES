@@ -147,3 +147,4 @@ class Projector:
         down = np.array([0.0, 0.0, -1.0])  # ENU straight down
         cos_angle = float(np.clip(np.dot(axis_world, down), -1.0, 1.0))
         return float(np.degrees(np.arccos(cos_angle)))
+# TODO(tw16): revisit
