@@ -347,4 +347,3 @@ class Confirmation:
             if f == self._frame:
                 return box
         return None
-# TODO(tw18): revisit
