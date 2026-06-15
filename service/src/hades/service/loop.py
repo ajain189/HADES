@@ -184,3 +184,283 @@ class ServiceLoop:
                         frame_id=frame_id,
                         track_id=t.track_id,
                         coord=fused.coord,
+                        r95_m=fused.r95_m,
+                        actionability_class=fused.actionability_class,
+                        semi_major_m=fused.semi_major_m,
+                        semi_minor_m=fused.semi_minor_m,
+                        orientation_deg=fused.orientation_deg,
+                        convergence=fused.convergence,
+                        heading_limited=fused.heading_limited,
+                        aspect_spread_deg=fused.aspect_spread_deg,
+                        moving_suspected=fused.moving_suspected,
+                        mc_reject_fraction=0.0,
+                        priority_tier=tier.name.lower(),
+                        detection_conf=buf.last_conf,
+                        localization_conf=_loc_conf(fused.r95_m),
+                        age_frames=age,
+                    )
+                )
+            else:
+                out.append(_cue_only_record(frame_id, t, tier, age, buf.last_conf, gp))
+        return out
+
+    def promote(self, track_id: int) -> ContactRecord | None:
+        """Operator-promote → on-demand Fuse (Task 5.10 / M6 — the human-as-confirmer path).
+
+        Force Fuse+Quantify on a track's buffered observations REGARDLESS of its
+        auto-confirmation tier: the operator says "localize THIS one now," exercising the whole
+        rationale for the Projector/Fuse split. Returns the refined ContactRecord, or `None` if
+        the track is unknown. A track with no fusable geometry (the position-only .srt path)
+        yields an honest CUE_ONLY (the promote can't fabricate a fix that the data can't give).
+        """
+        buf = self._bufs.get(track_id)
+        if buf is None:
+            return None  # unknown track — nothing to promote
+
+        last_frame = buf.first_frame if buf.first_frame >= 0 else 0
+        age = max(1, last_frame - buf.first_frame + 1)
+
+        fused = self.fuser.fuse(list(buf.obs)) if buf.obs else None
+        if fused is None:
+            # no fusable geometry → honest CUE_ONLY (no track object here; build directly)
+            return _cue_only_for_id(track_id, age, buf.last_conf)
+
+        return ContactRecord.from_fused(
+            frame_id=last_frame,
+            track_id=track_id,
+            coord=fused.coord,
+            r95_m=fused.r95_m,
+            actionability_class=fused.actionability_class,
+            semi_major_m=fused.semi_major_m,
+            semi_minor_m=fused.semi_minor_m,
+            orientation_deg=fused.orientation_deg,
+            convergence=fused.convergence,
+            heading_limited=fused.heading_limited,
+            aspect_spread_deg=fused.aspect_spread_deg,
+            moving_suspected=fused.moving_suspected,
+            mc_reject_fraction=0.0,
+            # operator-promoted → display as a candidate (operator-confirmed, not auto-STRONG)
+            priority_tier="candidate",
+            detection_conf=buf.last_conf,
+            localization_conf=_loc_conf(fused.r95_m),
+            age_frames=age,
+        )
+
+
+# --- small adapters / helpers -------------------------------------------------------
+
+
+def _should_buffer(gp: GroundPoint) -> bool:
+    """Whether a GroundPoint is eligible to enter the fusion buffer (DESIGN.md frame-gating).
+
+    Exactly `gp.fusable`: the gate verdict is not REJECT AND a finite coordinate exists. A
+    gate-REJECT frame is excluded from the FUSED estimate even when its ray projects to a
+    finite point - otherwise bad-geometry frames contaminate the dispatch coordinate. The
+    detection still surfaces (visibility is never gated); only fusion eligibility is."""
+    return gp.fusable
+
+
+def _as_detection(track):
+    from hades.detect.detector import Detection
+
+    return Detection(box_xyxy=track.box_xyxy, conf=track.conf, cls="person")
+
+
+def _fuse_obs(track, pose: Pose, camera: CameraModel) -> FuseObservation:
+    x_min, _y_min, x_max, y_max = track.box_xyxy
+    bottom_center = ((x_min + x_max) / 2.0, y_max)  # feet-on-ground (§3.2)
+    return FuseObservation(pose=pose, camera=camera, pixel=bottom_center)
+
+
+def _cue_only_ground_point(track) -> GroundPoint:
+    from hades.locate.frame_gate import GateVerdict
+
+    return GroundPoint(
+        detection=_as_detection(track), lat=None, lon=None, conf=track.conf,
+        verdict=GateVerdict.PASS_UNVERIFIED, gate_reasons=("no_pose",),
+    )
+
+
+def _cue_only_record(
+    frame_id: int, track, tier: Tier, age: int, conf: float, gp: GroundPoint | None
+) -> ContactRecord:
+    """A visible contact with no fused coordinate (position-only pose / un-projectable).
+
+    Recall-first: the detection still surfaces. The coordinate falls back to the projected
+    point if one exists (a gated-but-finite point), else None (NOT (0, 0), which would plot at
+    Null Island and read as a discovered survivor) flagged CUE_ONLY with a huge radius - the
+    operator sees a cue, never a false-precision pin."""
+    has_coord = gp is not None and gp.lat is not None and gp.lon is not None
+    lat = gp.lat if has_coord else None
+    lon = gp.lon if has_coord else None
+    return ContactRecord(
+        frame_id=frame_id,
+        track_id=track.track_id,
+        lat=lat,
+        lon=lon,
+        r95_m=200.0,  # the CUE floor - an area cue, not a point
+        actionability_class="CUE_ONLY",
+        semi_major_m=200.0,
+        semi_minor_m=200.0,
+        orientation_deg=0.0,
+        priority_tier=tier.name.lower(),
+        convergence_state="CONVERGING",
+        heading_limited=True,
+        aspect_spread_deg=0.0,
+        detection_conf=conf,
+        localization_conf=0.0,
+        mc_reject_fraction=1.0 if not has_coord else 0.0,
+        moving_suspected=False,
+        age_frames=age,
+    )
+
+
+def _cue_only_for_id(track_id: int, age: int, conf: float) -> ContactRecord:
+    """A CUE_ONLY record built from a track_id alone (the operator-promote path, which has no
+    live track object). Same honest no-fix shape as `_cue_only_record`: null coordinate, CUE
+    floor radius, never a Null-Island pin."""
+    return ContactRecord(
+        frame_id=0,
+        track_id=track_id,
+        lat=None,
+        lon=None,
+        r95_m=200.0,
+        actionability_class="CUE_ONLY",
+        semi_major_m=200.0,
+        semi_minor_m=200.0,
+        orientation_deg=0.0,
+        priority_tier="candidate",
+        convergence_state="CONVERGING",
+        heading_limited=True,
+        aspect_spread_deg=0.0,
+        detection_conf=conf,
+        localization_conf=0.0,
+        mc_reject_fraction=1.0,
+        moving_suspected=False,
+        age_frames=age,
+    )
+
+
+def _loc_conf(r95_m: float) -> float:
+    """Localization confidence bound to the floor-inclusive R95 (research gate §2): a tight
+    fused estimate is high-confidence, a big-radius one is low. Maps R95 in [1, 100] m -> [1, 0]."""
+    return float(np.clip(1.0 - (r95_m - 1.0) / 99.0, 0.0, 1.0))
+
+
+def _encode_jpeg(frame: np.ndarray) -> bytes:
+    buf = io.BytesIO()
+    Image.fromarray(frame, mode="RGB").save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+async def serve(
+    loop: ServiceLoop,
+    *,
+    binary_port: int = 8765,
+    json_port: int = 8766,
+    fps: float = 30.0,
+    max_frames: int | None = None,
+) -> None:
+    """Push the loop's per-frame outputs onto the two localhost WS channels.
+
+    Binary channel (`binary_port`): JPEG frames. JSON channel (`json_port`): one
+    `DetectionMessage` then any `ContactRecord`s per frame, frame_id-aligned to the JPEG.
+    Drop-to-latest: a slow consumer never blocks the pipeline - the newest frame wins. Kept
+    deliberately thin; the testable logic is in `run_messages`.
+    """
+    import asyncio
+
+    import websockets  # local import: only the serving path needs the dependency
+
+    # Each client gets a size-1 latest-wins queue drained by its OWN writer task. The pump
+    # NEVER awaits a client's socket - it does a non-blocking put that OVERWRITES any stale
+    # frame. So a slow / stalled consumer just keeps missing frames (drop-to-latest) while the
+    # pump advances unimpeded - the honest implementation of the §10 120 ms-budget claim, and
+    # the fix for the prior `await ws.send()` that could back-pressure the whole pipeline.
+    binary_clients: set = set()
+    json_clients: set = set()
+
+    async def _register(ws, pool):
+        queue: asyncio.Queue = asyncio.Queue(maxsize=1)
+        pool.add(queue)
+        writer = asyncio.create_task(_writer(ws, queue))
+        try:
+            await ws.wait_closed()
+        finally:
+            pool.discard(queue)
+            writer.cancel()
+
+    async def _register_json(ws):
+        # The JSON channel is bidirectional: the pump WRITES detections/contacts to this client
+        # (via its drop-to-latest queue + writer), and the client may SEND commands back. v1
+        # command: operator-promote → on-demand Fuse (Task 5.10 / M6). The refined record is
+        # sent straight to THIS client (not the broadcast queue) so the request/response pairs.
+        import json as _json
+
+        queue: asyncio.Queue = asyncio.Queue(maxsize=1)
+        json_clients.add(queue)
+        writer = asyncio.create_task(_writer(ws, queue))
+        try:
+            async for message in ws:  # inbound command loop; ends when the client disconnects
+                if not isinstance(message, str):
+                    continue
+                try:
+                    cmd = _json.loads(message)
+                except Exception:
+                    continue
+                if cmd.get("type") == "promote":
+                    tid = cmd.get("track_id")
+                    if isinstance(tid, int):
+                        rec = loop.promote(tid)
+                        if rec is not None:
+                            try:
+                                await ws.send(rec.model_dump_json())  # direct reply to requester
+                            except Exception:
+                                break
+        except Exception:
+            pass  # client errored/closed; finally cleans up
+        finally:
+            json_clients.discard(queue)
+            writer.cancel()
+
+    async def _writer(ws, queue: asyncio.Queue):
+        # The ONLY coroutine that awaits this client's socket. If the client stalls, this task
+        # blocks here - never the pump - and the queue simply overwrites while it waits. Each
+        # queue item is ONE frame's payloads (a list), so drop-to-latest drops a WHOLE frame
+        # atomically: a frame's DetectionMessage + its ContactRecords are never split apart.
+        try:
+            while True:
+                payloads = await queue.get()
+                for payload in payloads:
+                    await ws.send(payload)
+        except Exception:
+            return  # client gone / errored; its writer ends, _register cleans up the queue
+
+    def _publish(pool, payloads):
+        # Non-blocking latest-wins: drop the stale frame if the queue is full, then enqueue the
+        # new frame's payload group. The pump never awaits a consumer.
+        for queue in list(pool):
+            if queue.full():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            try:
+                queue.put_nowait(payloads)
+            except asyncio.QueueFull:
+                pass  # raced with the writer draining; the next frame wins anyway
+
+    async def _pump():
+        period = 1.0 / fps
+        for out in loop.run_messages(max_frames=max_frames):
+            _publish(binary_clients, [out.jpeg])
+            json_payloads = [out.detection_msg.model_dump_json()]
+            json_payloads += [c.model_dump_json() for c in out.contacts]
+            _publish(json_clients, json_payloads)
+            await asyncio.sleep(period)  # pace the feed; never blocks on a consumer
+
+    async with (
+        websockets.serve(lambda ws: _register(ws, binary_clients), "127.0.0.1", binary_port),
+        websockets.serve(_register_json, "127.0.0.1", json_port),
+    ):
+        await _pump()
