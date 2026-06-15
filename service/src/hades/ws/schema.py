@@ -82,3 +82,88 @@ class ContactRecord(BaseModel):
     separation is what stops the smug-filter lie from reaching the operator. `r95_m` is the
     honest equal-coverage sweep radius (the empirical MC quantile, NOT the major semi-axis);
     the ellipse (semi-axes + orientation) is the expert overlay.
+
+    Deferred to v1.x (NOT here - the localizer cannot honestly fill them): `clearance_state`
+    (a UI-mutated mission-log field), `snapshot_on_dispatch_coord`/`delta` (premature wire
+    optimization), `cluster_id` (needs multi-survivor disambiguation v1 does not claim).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    type: Literal["contact"] = "contact"
+    frame_id: int = Field(ge=0, description="FrameSource seq this record aligns to")
+    track_id: int = Field(ge=0)
+
+    # Localized coordinate, (lat, lon) degrees WGS84 order (§3.1). None for a CUE-ONLY contact
+    # with no fused coordinate (position-only pose / un-projectable): a hard (0, 0) would plot
+    # at Null Island and read as a discovered survivor, so the wire says None and forces the UI
+    # to special-case "no fix" rather than trust a false-precision pin.
+    lat: float | None
+    lon: float | None
+
+    # Honest uncertainty: the equal-coverage sweep radius + actionability + the expert ellipse.
+    r95_m: float = Field(ge=0.0, description="empirical 95% equal-coverage sweep radius, meters")
+    actionability_class: Literal["PINPOINT", "SWEEP", "AREA", "CUE_ONLY"]
+    semi_major_m: float = Field(ge=0.0)
+    semi_minor_m: float = Field(ge=0.0)
+    orientation_deg: float
+
+    # Display priority (from Confirmation, Phase 3) + temporal-stability + heading-limited cap.
+    priority_tier: Literal["contact", "candidate", "strong"]
+    convergence_state: Literal["CONVERGING", "STABLE"]
+    heading_limited: bool
+    aspect_spread_deg: float = Field(ge=0.0)
+
+    # The two SEPARATE confidence axes (§9).
+    detection_conf: float = Field(ge=0.0, le=1.0)
+    localization_conf: float = Field(ge=0.0, le=1.0)
+
+    # Honesty flags the localizer surfaces.
+    mc_reject_fraction: float = Field(ge=0.0, le=1.0)
+    moving_suspected: bool
+    age_frames: int = Field(ge=0)
+
+    @classmethod
+    def from_fused(
+        cls,
+        *,
+        frame_id: int,
+        track_id: int,
+        coord: tuple[float, float],
+        r95_m: float,
+        actionability_class: str,
+        semi_major_m: float,
+        semi_minor_m: float,
+        orientation_deg: float,
+        convergence: ConvergenceState,
+        heading_limited: bool,
+        aspect_spread_deg: float,
+        moving_suspected: bool,
+        mc_reject_fraction: float,
+        priority_tier: str,
+        detection_conf: float,
+        localization_conf: float,
+        age_frames: int,
+    ) -> ContactRecord:
+        """Build a wire record from a `FusedEstimate` plus the per-track metadata the service
+        loop owns (track_id, tier, detection_conf, frame_id, age)."""
+        return cls(
+            frame_id=frame_id,
+            track_id=track_id,
+            lat=coord[0],
+            lon=coord[1],
+            r95_m=r95_m,
+            actionability_class=actionability_class,
+            semi_major_m=semi_major_m,
+            semi_minor_m=semi_minor_m,
+            orientation_deg=orientation_deg,
+            priority_tier=priority_tier,
+            convergence_state=str(convergence.value),
+            heading_limited=heading_limited,
+            aspect_spread_deg=aspect_spread_deg,
+            detection_conf=detection_conf,
+            localization_conf=localization_conf,
+            mc_reject_fraction=mc_reject_fraction,
+            moving_suspected=moving_suspected,
+            age_frames=age_frames,
+        )
