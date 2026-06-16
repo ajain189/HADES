@@ -107,3 +107,112 @@ def _make_confirmer():
 
     return Confirmation()
 
+
+def _track_and_draw(img: Image.Image, detections, tracker, confirmer) -> None:
+    """Track this frame's detections, promote tiers, and draw each contact's id + tier.
+
+    Confirmation needs a world ground point per track; the observable CLI feeds it the
+    track's box-center in image space as a DISPLAY-ONLY proxy (the .srt fixture has no
+    attitude, so true georeferencing is unavailable here — the real world-clustering runs
+    in the assembled service, Phase 4). The proxy still lets persistence promote a stable
+    track through the tiers so the overlay is meaningful.
+    """
+    from hades.confirm.confirmation import Tier
+    from hades.detect.detector import Detection
+    from hades.locate.frame_gate import GateVerdict
+    from hades.locate.projector import GroundPoint
+
+    tracks = tracker.update(detections)
+    # Build a proxy GroundPoint per confirmed track from its box-center (image px → fake
+    # lat/lon at a tiny scale just so distinct tracks stay distinct in the proxy world).
+    ground: dict[int, GroundPoint] = {}
+    for t in tracks:
+        x_min, y_min, x_max, y_max = t.box_xyxy
+        cx, cy = (x_min + x_max) / 2.0, (y_min + y_max) / 2.0
+        det = Detection(box_xyxy=t.box_xyxy, conf=t.conf)
+        ground[t.track_id] = GroundPoint(
+            detection=det, lat=cy * 1e-5, lon=cx * 1e-5, conf=t.conf,
+            verdict=GateVerdict.PASS_UNVERIFIED,
+        )
+    tiers = confirmer.update(ground) if ground else {}
+
+    draw = ImageDraw.Draw(img)
+    for t in tracks:
+        tier = tiers.get(t.track_id, Tier.CONTACT)
+        color = TIER_COLORS[tier]
+        x_min, y_min, x_max, y_max = t.box_xyxy
+        draw.rectangle((x_min, y_min, x_max, y_max), outline=color, width=2)
+        label = f"#{t.track_id} {tier.name.lower()}"
+        ly = max(0, int(y_min) - 10)
+        draw.text((int(x_min) + 1, ly), label, fill=color)
+
+
+def make_detector(backend: str = "stub", *, model_path: str | Path | None = None, imgsz: int = 640):
+    """Construct a detector by backend name for the `--detect` CLI path.
+
+    `stub` is the deterministic, model-free default (CI/observability without weights);
+    `onnx` and `coreml` load a real exported model and so require `model_path`.
+    """
+    if backend == "stub":
+        from hades.detect.detector import StubDetector
+
+        return StubDetector()
+    if backend == "onnx":
+        if model_path is None:
+            raise ValueError("backend 'onnx' requires --model <path to .onnx>")
+        from hades.detect.onnx_detector import OnnxDetector
+
+        return OnnxDetector(model_path, imgsz=imgsz)
+    if backend == "coreml":
+        if model_path is None:
+            raise ValueError("backend 'coreml' requires --model <path to .mlpackage>")
+        from hades.detect.coreml_detector import CoreMLDetector
+
+        return CoreMLDetector(model_path, imgsz=imgsz)
+    raise ValueError(f"unknown detector backend {backend!r} (choose stub|onnx|coreml)")
+
+
+def _draw_detections(img: Image.Image, detections) -> None:
+    """Draw each detection box + confidence onto the frame (boxes in original pixels)."""
+    draw = ImageDraw.Draw(img)
+    for d in detections:
+        x_min, y_min, x_max, y_max = d.box_xyxy
+        draw.rectangle((x_min, y_min, x_max, y_max), outline=BOX_COLOR, width=2)
+        label = f"{d.cls} {d.conf:.2f}"
+        # Put the label just above the box, clamped into frame so it stays visible.
+        ly = max(0, int(y_min) - 10)
+        draw.text((int(x_min) + 1, ly), label, fill=BOX_COLOR)
+
+
+def _fmt(value: float | None, suffix: str = "") -> str:
+    return f"{value:.3f}{suffix}" if value is not None else "--"
+
+
+def _pose_lines(aligned: AlignedFrame) -> list[str]:
+    pose: Pose | None = aligned.pose
+    status = aligned.pose_status.value
+    if pose is None or aligned.pose_status is PoseStatus.MISSING:
+        return [f"seq {aligned.frame.seq}  t={aligned.frame.timestamp:.3f}s", "POSE: no telemetry"]
+    fix = (
+        f"{pose.lat:.6f}, {pose.lon:.6f}"
+        if pose.gps_valid and pose.lat is not None and pose.lon is not None
+        else "no fix"
+    )
+    return [
+        f"seq {aligned.frame.seq}  t={aligned.frame.timestamp:.3f}s  [{status}]",
+        f"fix: {fix}",
+        f"alt: {_fmt(pose.alt, ' m')} ({pose.alt_datum})",
+        f"att: r={_fmt(pose.roll)} p={_fmt(pose.pitch)} y={_fmt(pose.yaw)}",
+    ]
+
+
+def _draw_overlay(img: Image.Image, aligned: AlignedFrame) -> None:
+    draw = ImageDraw.Draw(img)
+    lines = _pose_lines(aligned)
+    # A translucent backing box keeps text legible over any frame content.
+    line_h = 11
+    box_h = line_h * len(lines) + 4
+    box = Image.new("RGB", (img.width, min(box_h, img.height)), (0, 0, 0))
+    img.paste(Image.blend(img.crop((0, 0, img.width, box.height)), box, 0.55), (0, 0))
+    for i, line in enumerate(lines):
+        draw.text((3, 2 + i * line_h), line, fill=(0, 255, 120))
