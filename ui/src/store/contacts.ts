@@ -38,3 +38,44 @@ export const useContactStore = create<ContactState>((set, get) => ({
   },
 
   ingestDetection: (msg) => {
+    const current = get().latestDetection;
+    // Ignore out-of-order stragglers — only advance to a newer frame (drop-to-latest).
+    if (current && msg.frame_id < current.frame_id) return;
+    set({ latestDetection: msg });
+  },
+
+  ingestJson: (msg) => {
+    if (msg.type === "contact") get().ingestContact(msg);
+    else get().ingestDetection(msg);
+  },
+
+  addManualContact: () => {
+    const track_id = nextManualId--;
+    const det = get().latestDetection;
+    get().ingestContact({
+      type: "contact",
+      frame_id: det?.frame_id ?? 0,
+      track_id,
+      // operator marks a CUE, does not claim a localized fix (honest: null coord, big radius)
+      lat: null,
+      lon: null,
+      r95_m: 0,
+      actionability_class: "CUE_ONLY",
+      semi_major_m: 0,
+      semi_minor_m: 0,
+      orientation_deg: 0,
+      priority_tier: "candidate",
+      convergence_state: "CONVERGING",
+      heading_limited: false,
+      aspect_spread_deg: 0,
+      detection_conf: 1.0, // a human SAW this person — detection certainty is the point
+      localization_conf: 0.0, // but it isn't localized
+      mc_reject_fraction: 0,
+      moving_suspected: false,
+      age_frames: 0,
+    });
+    return track_id;
+  },
+
+  reset: () => set({ contacts: new Map(), latestDetection: null }),
+}));
