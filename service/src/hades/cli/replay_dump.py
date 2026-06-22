@@ -216,4 +216,3 @@ def _draw_overlay(img: Image.Image, aligned: AlignedFrame) -> None:
     img.paste(Image.blend(img.crop((0, 0, img.width, box.height)), box, 0.55), (0, 0))
     for i, line in enumerate(lines):
         draw.text((3, 2 + i * line_h), line, fill=(0, 255, 120))
-# TODO(tw22): revisit
