@@ -90,4 +90,3 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", stopService);
-// TODO(tw23): revisit
