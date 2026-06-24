@@ -20,4 +20,3 @@ declare global {
 }
 
 export {};
-// TODO(tw24): revisit
