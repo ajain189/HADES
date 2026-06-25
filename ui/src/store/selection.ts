@@ -46,4 +46,3 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
   isHovered: (id) => get().hoveredId === id,
   reset: () => set({ selectedId: null, hoveredId: null }),
 }));
-// TODO(tw25): revisit
