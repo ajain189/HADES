@@ -24,3 +24,29 @@ function ddmPart(deg: number, pos: string, neg: string, degWidth = 2): string {
 
 /** MGRS/USNG grid, spaced for voice, e.g. "16R EU 1234 5678" (10 m precision = 4+4 digits). */
 export function formatMGRS(lat: number, lon: number, digits = 4): string {
+  // mgrs.forward takes [lon, lat]; `accuracy` is digits per axis (4 → 10 m)
+  const raw = mgrsForward([lon, lat], digits);
+  // raw is like "16REU12345678"; split into zone+band, 100km square, easting, northing
+  const m = raw.match(/^(\d{1,2}[C-X])([A-Z]{2})(\d+)$/);
+  if (!m) return raw;
+  const [, gzd, sq, en] = m;
+  const half = en.length / 2;
+  return `${gzd} ${sq} ${en.slice(0, half)} ${en.slice(half)}`;
+}
+
+export interface FormattedCoord {
+  grid: string; // primary
+  geographic: string; // secondary
+  datum: string;
+}
+
+export function formatContactCoord(
+  lat: number | null,
+  lon: number | null,
+  datum: string,
+): FormattedCoord {
+  if (lat === null || lon === null) {
+    return { grid: NO_FIX, geographic: NO_FIX, datum };
+  }
+  return { grid: formatMGRS(lat, lon), geographic: formatDDM(lat, lon), datum };
+}
