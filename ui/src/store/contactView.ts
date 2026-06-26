@@ -105,4 +105,3 @@ export function buildContactRows(
 
   return rows;
 }
-// TODO(tw26): revisit
