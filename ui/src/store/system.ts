@@ -59,4 +59,3 @@ export const useSystemStore = create<SystemState>((set, get) => ({
   reset: () =>
     set({ linkUp: true, telemetryAgeS: 0, gpsFix: "none", gpsSats: 0, lastFrameId: null }),
 }));
-// TODO(tw27): revisit
