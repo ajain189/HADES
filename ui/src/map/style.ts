@@ -45,3 +45,51 @@ export function operationalStyle(opts: OperationalStyleOptions = {}): StyleSpeci
   if (opts.pmtilesUrl) {
     sources.basemap = {
       type: "vector",
+      url: opts.pmtilesUrl,
+    };
+    // Land/water/road geometry off the pmtiles basemap. Source-layer ids are the Protomaps
+    // BASEMAPS v4 schema (verified against the extract's `vector_layers` metadata, NOT the
+    // OpenMapTiles names): land polygon = `earth`, water = `water`, roads = `roads` (NOT
+    // `transportation`). No symbol (label) layer in v1: text needs a `glyphs` source, and the
+    // offline constraint forbids a remote glyphs URL — bundled offline glyphs are a v1.x
+    // refinement (LABEL kept for it).
+    void LABEL;
+    layers.push(
+      // earth: the land polygon. Painted just above the flat background so coastline/landmass
+      // reads as real terrain (the background still shows through anywhere earth is absent).
+      {
+        id: "earth",
+        type: "fill",
+        source: "basemap",
+        "source-layer": "earth",
+        paint: { "fill-color": LAND },
+      },
+      {
+        id: "water",
+        type: "fill",
+        source: "basemap",
+        "source-layer": "water",
+        paint: { "fill-color": WATER },
+      },
+      {
+        id: "roads",
+        type: "line",
+        source: "basemap",
+        "source-layer": "roads",
+        paint: { "line-color": ROAD, "line-width": 0.6 },
+      },
+    );
+  }
+
+  // NOTE: do NOT emit a `glyphs` key. MapLibre's Style._load requires glyphs to be ABSENT
+  // or a string; an explicit `glyphs: undefined` fails "string expected" and aborts the
+  // load (→ blank canvas). With no symbol layers there is nothing that needs glyphs.
+  return {
+    version: 8,
+    sources,
+    layers,
+  } as StyleSpecification;
+}
+
+// Exposed for tests + any non-map surface that needs the operational basemap colors.
+export const OPERATIONAL_COLORS = THEME_COLORS;
