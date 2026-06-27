@@ -19,4 +19,3 @@ export const CLEARED_STATES: ReadonlySet<ClearanceState> = new Set([
 export function isCleared(state: ClearanceState): boolean {
   return CLEARED_STATES.has(state);
 }
-// TODO(tw28): revisit
