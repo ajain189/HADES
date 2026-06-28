@@ -15,4 +15,3 @@ export function contactStatus(r: ContactRecord): Status {
   if (r.actionability_class === "PINPOINT") return "caution"; // PINPOINT but not yet strong
   return "info"; // AREA and the remaining candidate/contact states
 }
-// TODO(tw30): revisit
