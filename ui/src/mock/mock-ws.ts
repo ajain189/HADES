@@ -40,3 +40,45 @@ export class MockWsServer {
 
   onFrame(cb: FrameListener): Unsubscribe {
     this.frameListeners.add(cb);
+    return () => this.frameListeners.delete(cb);
+  }
+
+  onJson(cb: JsonListener): Unsubscribe {
+    this.jsonListeners.add(cb);
+    return () => this.jsonListeners.delete(cb);
+  }
+
+  /** Group JSON messages by the frame they belong to so both channels stay aligned. */
+  private jsonByFrame(): Map<number, (DetectionMessage | ContactRecord)[]> {
+    const byFrame = new Map<number, (DetectionMessage | ContactRecord)[]>();
+    for (const m of this.json) {
+      const list = byFrame.get(m.frame_id) ?? [];
+      list.push(m);
+      byFrame.set(m.frame_id, list);
+    }
+    return byFrame;
+  }
+
+  /** Replay the canned mission, frame by frame, emitting both channels in frame_id order. */
+  async play(): Promise<void> {
+    this.stopped = false;
+    const byFrame = this.jsonByFrame();
+
+    for (const frame of this.frames) {
+      if (this.stopped) return;
+      for (const cb of this.frameListeners) cb(frame);
+      for (const m of byFrame.get(frame.frame_id) ?? []) {
+        for (const cb of this.jsonListeners) cb(m);
+      }
+      if (this.intervalMs > 0) await delay(this.intervalMs);
+    }
+  }
+
+  stop(): void {
+    this.stopped = true;
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
