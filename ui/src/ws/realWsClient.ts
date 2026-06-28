@@ -58,3 +58,64 @@ export interface RealWsConfig {
 
 /** Connects both channels and routes messages to the handlers. Reconnects are the caller's
  *  concern (the service is supervised by Electron main); link-down is surfaced via onLinkChange. */
+const RETRY_MS = 1000;
+
+export class RealWsClient {
+  private binary?: WebSocket;
+  private json?: WebSocket;
+  private closed = false;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(
+    private readonly config: RealWsConfig,
+    private readonly handlers: RealWsHandlers,
+  ) {}
+
+  connect(): void {
+    this.closed = false;
+    this.binary = new WebSocket(this.config.binaryUrl);
+    this.binary.binaryType = "arraybuffer";
+    this.binary.onmessage = (e) => {
+      if (e.data instanceof ArrayBuffer) this.handlers.onFrame(new Uint8Array(e.data));
+    };
+    this.binary.onopen = () => this.handlers.onLinkChange?.(true);
+    this.binary.onclose = () => this.onDrop();
+    this.binary.onerror = () => this.onDrop();
+
+    this.json = new WebSocket(this.config.jsonUrl);
+    this.json.onmessage = (e) => {
+      if (typeof e.data === "string") {
+        const msg = parseJsonMessage(e.data);
+        if (msg) this.handlers.onJson(msg);
+      }
+    };
+  }
+
+  // The service may not be up yet at load, or may restart (Electron supervises it). Surface
+  // link-down (degrade visibly) and retry on a fixed backoff until intentionally closed.
+  private onDrop(): void {
+    if (this.closed) return;
+    this.handlers.onLinkChange?.(false);
+    if (this.retryTimer) return; // a retry is already scheduled
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (!this.closed) this.connect();
+    }, RETRY_MS);
+  }
+
+  /** Operator-promote → on-demand Fuse command (Task 5.10 / M6): ask the service to fuse this
+   *  track now, even if not auto-confirmed. The refined ContactRecord returns via onJson. */
+  sendPromote(trackId: number): void {
+    if (this.json && this.json.readyState === WebSocket.OPEN) {
+      this.json.send(JSON.stringify({ type: "promote", track_id: trackId }));
+    }
+  }
+
+  close(): void {
+    this.closed = true;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
+    this.binary?.close();
+    this.json?.close();
+  }
+}
