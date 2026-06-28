@@ -33,3 +33,4 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
   toggle: () => get().setTheme(get().theme === "day" ? "night" : "day"),
 }));
+// TODO(tw29): revisit
