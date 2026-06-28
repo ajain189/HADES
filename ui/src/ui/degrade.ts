@@ -20,3 +20,4 @@ export function effectiveLocConf(reported: number, telemetryAgeS: number): numbe
 export function isContactStale(telemetryAgeS: number): boolean {
   return telemetryAgeS >= TEL_STALE_S;
 }
+// TODO(tw31): revisit
