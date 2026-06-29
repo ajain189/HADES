@@ -146,3 +146,280 @@ export function MapView({ pmtilesUrl = DEFAULT_PMTILES_URL }: { pmtilesUrl?: str
       });
       // current camera footprint — a brighter outlined quad
       map.addLayer({
+        id: "footprint-fill",
+        type: "fill",
+        source: FOOTPRINT_SRC,
+        paint: { "fill-color": D.cool, "fill-opacity": 0.12 },
+      });
+      map.addLayer({
+        id: "footprint-line",
+        type: "line",
+        source: FOOTPRINT_SRC,
+        paint: { "line-color": D.cool, "line-width": 1, "line-dasharray": [2, 1] },
+      });
+      // drone flight track — a thin cool line
+      map.addLayer({
+        id: "track-line",
+        type: "line",
+        source: TRACK_SRC,
+        paint: { "line-color": D.cool, "line-width": 1.5 },
+      });
+      // drone position
+      map.addLayer({
+        id: "drone-dot",
+        type: "circle",
+        source: DRONE_SRC,
+        paint: {
+          "circle-radius": 5,
+          "circle-color": D.droneFill,
+          "circle-stroke-color": D.droneStroke,
+          "circle-stroke-width": 1.5,
+        },
+      });
+
+      map.addSource(RING_SRC, { type: "geojson", data: emptyFC() });
+      // pin source clusters at low zoom so the map stays legible under dozens of contacts (§5.1)
+      map.addSource(PIN_SRC, {
+        type: "geojson",
+        data: emptyFC(),
+        cluster: true,
+        clusterRadius: 44,
+        clusterMaxZoom: 13,
+      });
+
+      // uncertainty rings: low fill + strong stroke (the EDGE carries the meaning, §5.1). On
+      // light the fill is even fainter, so the stroke does the work (§12).
+      map.addLayer({
+        id: "uncertainty-fill",
+        type: "fill",
+        source: RING_SRC,
+        paint: { "fill-color": circleStrokeColorExpr(theme), "fill-opacity": theme === "day" ? 0.08 : 0.12 },
+      });
+      map.addLayer({
+        id: "uncertainty-stroke",
+        type: "line",
+        source: RING_SRC,
+        paint: { "line-color": circleStrokeColorExpr(theme), "line-width": circleStrokeWidthExpr() },
+      });
+
+      // clusters (low zoom): a count bubble so the map stays legible under many contacts.
+      // Bubble + count flip for the light ground (dark text on a light bubble).
+      const clusterFill = theme === "day" ? "#FAF9F6" : "#28303E";
+      const clusterStroke = theme === "day" ? "#2B5E8E" : "#5E9BD6";
+      const clusterText = theme === "day" ? "#201E1A" : "#E6EDF3";
+      map.addLayer({
+        id: "pin-cluster",
+        type: "circle",
+        source: PIN_SRC,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-radius": ["step", ["get", "point_count"], 12, 5, 16, 15, 22],
+          "circle-color": clusterFill,
+          "circle-stroke-color": clusterStroke,
+          "circle-stroke-width": 1.5,
+        },
+      });
+      map.addLayer({
+        id: "pin-cluster-count",
+        type: "symbol",
+        source: PIN_SRC,
+        filter: ["has", "point_count"],
+        layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11 },
+        paint: { "text-color": clusterText },
+      });
+
+      // pins (individual, not clustered): reticle = outer ring + center dot, top (§5.1 z-order).
+      map.addLayer({
+        id: "pin-ring",
+        type: "circle",
+        source: PIN_SRC,
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-radius": pinRadiusExpr(),
+          "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-color": pinColorExpr(theme),
+          "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: "pin-dot",
+        type: "circle",
+        source: PIN_SRC,
+        filter: ["!", ["has", "point_count"]],
+        paint: { "circle-radius": 2, "circle-color": pinColorExpr(theme) },
+      });
+
+      // click a cluster → zoom in to expand it
+      map.on("click", "pin-cluster", (e) => {
+        const f = map.queryRenderedFeatures(e.point, { layers: ["pin-cluster"] })[0];
+        const clusterId = f?.properties?.cluster_id;
+        const src = map.getSource(PIN_SRC) as maplibregl.GeoJSONSource;
+        if (clusterId == null || !src.getClusterExpansionZoom) return;
+        void src.getClusterExpansionZoom(clusterId).then((zoom) => {
+          map.easeTo({ center: (f.geometry as Point).coordinates as [number, number], zoom });
+        });
+      });
+
+      // click a pin → commit selection (pin → selection spine)
+      map.on("click", "pin-ring", (e) => {
+        const f = e.features?.[0];
+        if (f) useSelectionStore.getState().select(f.properties!.track_id as number);
+      });
+      map.on("mouseenter", "pin-ring", () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", "pin-ring", () => (map.getCanvas().style.cursor = ""));
+
+      // prime with whatever is already in the store
+      syncData();
+      syncTelemetry();
+      syncVisibility();
+    });
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (window.__hadesMap === map) delete window.__hadesMap;
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pmtilesUrl, theme]);
+
+  // re-sync whenever contacts, selection, or telemetry change
+  useEffect(() => {
+    const unsubC = useContactStore.subscribe(() => syncData());
+    const unsubS = useSelectionStore.subscribe(() => syncData());
+    const unsubT = useTelemetryStore.subscribe(() => syncTelemetry());
+    const unsubL = useLayerStore.subscribe(() => syncVisibility());
+    return () => {
+      unsubC();
+      unsubS();
+      unsubT();
+      unsubL();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Apply operator layer toggles to the map's layout visibility.
+  function syncVisibility() {
+    const map = mapRef.current;
+    if (!map || !map.getLayer("coverage-fill")) return;
+    const visible = useLayerStore.getState().visible;
+    for (const [key, ids] of Object.entries(LAYER_IDS)) {
+      const v = visible[key as LayerKey] ? "visible" : "none";
+      for (const id of ids) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
+      }
+    }
+  }
+
+  // Push drone track / footprint / coverage to the map.
+  function syncTelemetry() {
+    const map = mapRef.current;
+    if (!map || !map.getSource(TRACK_SRC)) return;
+    const t = useTelemetryStore.getState();
+    (map.getSource(COVERAGE_SRC) as maplibregl.GeoJSONSource)?.setData(coverageGeoJSON(t.coverage));
+    (map.getSource(FOOTPRINT_SRC) as maplibregl.GeoJSONSource)?.setData(footprintGeoJSON(t.footprint));
+    (map.getSource(TRACK_SRC) as maplibregl.GeoJSONSource)?.setData(trackGeoJSON(t.track));
+    (map.getSource(DRONE_SRC) as maplibregl.GeoJSONSource)?.setData(droneGeoJSON(t.pose));
+  }
+
+  // Push current store state to the map, feeding the tweener so pins glide on refine.
+  function syncData() {
+    const map = mapRef.current;
+    if (!map || !map.getSource(PIN_SRC)) return;
+    const contacts = [...useContactStore.getState().contacts.values()];
+    const selectedId = useSelectionStore.getState().selectedId;
+    const now = performance.now();
+
+    // feed targets to the tweener (eased motion), then render eased positions
+    for (const c of contacts) {
+      if (c.lat !== null && c.lon !== null) {
+        tweenerRef.current.setTarget(c.track_id, toLngLat(c.lat, c.lon), now);
+      }
+    }
+    render(contacts, selectedId, now);
+    startTickIfNeeded();
+    maybeFitToData();
+  }
+
+  // Frame the viewport over all located data (contacts + drone track) the FIRST time any
+  // appears, so the scene composes instead of scattering pins in a dead field. Once. After
+  // that the operator owns the camera (pan/zoom); we never yank it from under them.
+  function maybeFitToData() {
+    const map = mapRef.current;
+    if (!map || fittedRef.current) return;
+    const pts: [number, number][] = [];
+    for (const c of useContactStore.getState().contacts.values()) {
+      if (c.lat !== null && c.lon !== null) pts.push(toLngLat(c.lat, c.lon));
+    }
+    pts.push(...useTelemetryStore.getState().track);
+    if (pts.length === 0) return;
+    fittedRef.current = true;
+    const lons = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    const bounds: [[number, number], [number, number]] = [
+      [Math.min(...lons), Math.min(...lats)],
+      [Math.max(...lons), Math.max(...lats)],
+    ];
+    map.fitBounds(bounds, { padding: 120, maxZoom: 14, duration: 0 });
+  }
+
+  // render one frame of eased positions to the GeoJSON sources
+  function render(contacts: ContactRecord[], selectedId: number | null, now: number) {
+    const map = mapRef.current;
+    if (!map) return;
+    const eased = contacts
+      .filter((c) => c.lat !== null && c.lon !== null)
+      .map((c) => {
+        const pos = tweenerRef.current.positionAt(c.track_id, now) ?? toLngLat(c.lat!, c.lon!);
+        return { ...c, lat: pos[1], lon: pos[0] };
+      });
+
+    (map.getSource(PIN_SRC) as maplibregl.GeoJSONSource)?.setData(
+      contactsToGeoJSON(eased, selectedId) as unknown as FeatureCollection,
+    );
+    (map.getSource(RING_SRC) as maplibregl.GeoJSONSource)?.setData(
+      contactsToCirclesGeoJSON(eased, selectedId) as unknown as FeatureCollection,
+    );
+  }
+
+  // keep ticking while any pin is gliding (then stop — no idle animation loop)
+  function startTickIfNeeded() {
+    if (rafRef.current || !tweenerRef.current.active) return;
+    const tick = () => {
+      rafRef.current = null;
+      const contacts = [...useContactStore.getState().contacts.values()];
+      render(contacts, useSelectionStore.getState().selectedId, performance.now());
+      if (tweenerRef.current.active) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
+  if (mapError) {
+    // Honest degrade: the map needs WebGL, which this browser/GPU doesn't provide. The rest of
+    // the coordinator (list, video, status, mission log) stays fully usable.
+    return (
+      <div
+        data-testid="map-unavailable"
+        className="absolute inset-0 flex h-full w-full items-center justify-center bg-bg-base p-6 text-center font-mono text-xs text-text-lo"
+      >
+        <p className="max-w-sm leading-relaxed">
+          Map unavailable: this browser could not initialize WebGL. The survivor list, video, and
+          mission log remain available; coordinates are shown in the contact panel.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 h-full w-full">
+      <div ref={containerRef} data-testid="map-view" className="absolute inset-0 h-full w-full" />
+      <LayerToggle />
+    </div>
+  );
+}
+
+function emptyFC(): FeatureCollection {
+  return { type: "FeatureCollection", features: [] };
+}
