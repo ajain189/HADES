@@ -103,3 +103,108 @@ export function VideoPanel() {
       img.src = url;
     } catch {
       draw();
+    }
+  }
+
+  const togglePause = () => {
+    const b = bufferRef.current;
+    if (b.isLive) b.pause();
+    else b.resume();
+    setIsLive(b.isLive);
+    paint();
+  };
+
+  const rewind = () => {
+    bufferRef.current.stepBack();
+    setIsLive(bufferRef.current.isLive);
+    paint();
+  };
+
+  return (
+    <div className="relative flex h-full flex-col bg-video-letterbox">
+      <div className="relative min-h-0 flex-1">
+        <canvas
+          ref={canvasRef}
+          data-testid="video-canvas"
+          width={960}
+          height={540}
+          className="h-full w-full object-contain"
+        />
+        {!hasFrame && (
+          <div className="absolute inset-0 flex items-center justify-center font-mono text-2xs text-text-lo">
+            No video — awaiting feed
+          </div>
+        )}
+        {!linkUp && (
+          <div
+            data-testid="link-lost-banner"
+            className="absolute inset-0 flex items-center justify-center bg-video-letterbox/70"
+          >
+            <span className="rounded-sm border border-st-critical px-3 py-1 font-mono text-sm font-bold text-st-critical">
+              ⚠ LINK LOST · FROZEN
+            </span>
+          </div>
+        )}
+        {/* Demo mode: name the synthetic feed instead of the live FRESH indicator, so the
+            near-black baked frame never poses as a live operational feed. Off-ramp violet-slate
+            (--st-stale), matching the demo banner's "epistemic caveat, not an alarm" semantic. */}
+        {isDemo ? (
+          <span
+            data-testid="video-demo-badge"
+            className="absolute left-2 top-2 flex items-center gap-1.5 rounded-sm border border-st-stale/30 bg-video-letterbox/80 px-2 py-0.5 font-mono text-2xs text-st-stale"
+          >
+            <FlaskConical size={11} aria-hidden /> SYNTHETIC FEED · DEMO
+          </span>
+        ) : (
+          hasFrame &&
+          linkUp && (
+            <span
+              data-testid="fresh-indicator"
+              className={`absolute left-2 top-2 rounded-sm bg-video-letterbox/80 px-2 py-0.5 font-mono text-2xs ${isLive ? "text-st-nominal" : "text-st-caution"}`}
+            >
+              {isLive ? "● FRESH" : "❚❚ PAUSED"}
+            </span>
+          )
+        )}
+      </div>
+
+      {/* transport controls */}
+      <div className="flex items-center gap-3 border-t border-hairline bg-surface-1 px-3 py-1 font-mono text-2xs text-text-mid">
+        <button aria-label="rewind" onClick={rewind} className="flex items-center gap-1 hover:text-text-hi">
+          <Rewind size={13} aria-hidden /> rewind
+        </button>
+        <button aria-label="pause" onClick={togglePause} className="flex items-center gap-1 hover:text-text-hi">
+          {isLive ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />} {isLive ? "pause" : "play"}
+        </button>
+        <button aria-label="snapshot" className="flex items-center gap-1 hover:text-text-hi">
+          <Camera size={13} aria-hidden /> snapshot
+        </button>
+        <button
+          aria-label="manual contact"
+          onClick={() => addManualContact()}
+          className="ml-auto flex items-center gap-1 text-st-warning hover:brightness-110"
+        >
+          <Plus size={13} aria-hidden /> manual
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* A tiny pub-sub so the app/mock/real-WS can feed JPEG frames into the panel without
+ * prop-drilling a stream through the layout. The mock wires onFrame → push here (Task 5.1);
+ * the real preload bridge replaces the source in 5.9. */
+type Sink = (f: MockFrame) => void;
+class VideoFrameSink {
+  private listeners = new Set<Sink>();
+  subscribe(cb: Sink) {
+    this.listeners.add(cb);
+  }
+  unsubscribe(cb: Sink) {
+    this.listeners.delete(cb);
+  }
+  push(f: MockFrame) {
+    for (const cb of this.listeners) cb(f);
+  }
+}
+export const videoFrameSink = new VideoFrameSink();
