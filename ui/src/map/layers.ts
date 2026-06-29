@@ -68,4 +68,3 @@ export function circleStrokeColorExpr(theme: MapTheme = "night"): ExpressionSpec
 export function circleStrokeWidthExpr(): ExpressionSpecification {
   return ["case", ["get", "selected"], 2.2, 1.2] as unknown as ExpressionSpecification;
 }
-// TODO(tw32): revisit
