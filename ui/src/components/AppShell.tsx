@@ -23,3 +23,29 @@ export function AppShell({ map, list, video, missionLog }: AppShellProps) {
   return (
     <div className="flex h-full flex-col gap-3 bg-bg-base p-3 text-text-hi">
       {/* main: map-primary center + right rail (contacts over video) */}
+      <div className="grid min-h-0 flex-1 grid-cols-[1fr_400px] gap-3">
+        <section aria-label="Map" className={`relative min-h-0 ${card}`} data-region="map">
+          {map}
+        </section>
+
+        <div className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
+          <section
+            aria-label="Contacts"
+            className={`min-h-0 overflow-auto ${card}`}
+            data-region="list"
+          >
+            {list}
+          </section>
+          <section aria-label="Video" className={`min-h-0 ${card}`} data-region="video">
+            {video}
+          </section>
+        </div>
+      </div>
+
+      {/* mission log — append-only foot card */}
+      <section aria-label="Mission log" className={card} data-region="mission-log">
+        {missionLog}
+      </section>
+    </div>
+  );
+}
