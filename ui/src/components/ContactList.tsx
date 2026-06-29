@@ -70,3 +70,76 @@ export function ContactList() {
           ))}
         </tr>
       </thead>
+      <tbody>
+        {rows.map((row) => (
+          <ContactRowView key={row.record.track_id} row={row} />
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ContactRowView({ row }: { row: ContactRow }) {
+  const { record } = row;
+  const selectedId = useSelectionStore((s) => s.selectedId);
+  const select = useSelectionStore((s) => s.select);
+  const hover = useSelectionStore((s) => s.hover);
+  const clearHover = useSelectionStore((s) => s.clearHover);
+  const isSelected = selectedId === record.track_id;
+  const status = contactStatus(record);
+
+  return (
+    <tr
+      role="row"
+      data-testid={`row-${record.track_id}`}
+      data-contact-row="true"
+      data-track-id={record.track_id}
+      data-selected={isSelected}
+      aria-selected={isSelected}
+      tabIndex={0}
+      onClick={() => select(record.track_id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          select(record.track_id);
+        }
+      }}
+      onMouseEnter={() => hover(record.track_id)}
+      onMouseLeave={() => clearHover()}
+      className={`h-[var(--row-h)] cursor-pointer border-l-2 outline-none transition-colors duration-micro ${
+        isSelected
+          ? "border-blue-bright bg-surface-3"
+          : "border-transparent hover:bg-surface-2"
+      } ${row.cleared ? "opacity-60" : ""} focus-visible:shadow-focus`}
+    >
+      <td className={`px-1 ${statusTextClass(status)}`} aria-label={status}>
+        {statusGlyph(status)}
+      </td>
+      <td className="px-1 text-text-hi">{record.track_id}</td>
+      <td className="px-1 text-text-mid">{record.actionability_class}</td>
+      <td className="px-1">
+        <ConfidenceBar value={record.detection_conf} label="detection confidence" />
+      </td>
+      <td className="px-1">
+        <ConfidenceBar
+          value={record.lat === null ? null : record.localization_conf}
+          label="localization confidence"
+        />
+      </td>
+      <td className="px-1 text-text-mid">{row.clearance.replace("_", " ")}</td>
+      <td className="px-1 text-text-mid">{formatAge(record.age_frames / FRAME_RATE)}</td>
+      <td className="px-1 text-text-mid">
+        {record.convergence_state === "STABLE" ? "STBL" : "CONV"}
+      </td>
+      <td className="px-1">
+        {record.heading_limited ? (
+          <span className="text-st-stale" title="heading-limited">
+            ⚠ HL
+          </span>
+        ) : (
+          <span className="text-text-lo">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
