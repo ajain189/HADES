@@ -76,3 +76,82 @@ export function ReviewPage() {
             <thead className="sticky top-0 bg-surface-1 text-text-lo">
               <tr className="text-left">
                 <th className="w-8 px-3 py-2" />
+                <th className="px-3 py-2 font-medium">TRK</th>
+                <th className="px-3 py-2 font-medium">CLASS</th>
+                <th className="px-3 py-2 font-medium">DET</th>
+                <th className="px-3 py-2 font-medium">LOC</th>
+                <th className="px-3 py-2 font-medium">CLEARANCE</th>
+                <th className="px-3 py-2 font-medium">AGE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((row) => {
+                const { record } = row;
+                const isSelected = selectedId === record.track_id;
+                const status = contactStatus(record);
+                return (
+                  <tr
+                    key={record.track_id}
+                    data-testid={`review-row-${record.track_id}`}
+                    data-contact-row="true"
+                    data-track-id={record.track_id}
+                    data-selected={isSelected}
+                    onClick={() => select(record.track_id)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        select(record.track_id);
+                      }
+                    }}
+                    className={`h-11 cursor-pointer border-l-2 outline-none transition-colors duration-micro focus-visible:shadow-focus ${
+                      isSelected ? "border-blue-bright bg-surface-3" : "border-transparent hover:bg-surface-2"
+                    } ${row.cleared ? "opacity-60" : ""}`}
+                  >
+                    <td className={`px-3 ${statusTextClass(status)}`} aria-label={status}>
+                      {statusGlyph(status)}
+                    </td>
+                    <td className="px-3 text-text-hi">{record.track_id}</td>
+                    <td className="px-3 text-text-mid">{record.actionability_class}</td>
+                    <td className="px-3">
+                      <ConfidenceBar value={record.detection_conf} label="detection confidence" />
+                    </td>
+                    <td className="px-3">
+                      <ConfidenceBar
+                        value={record.lat === null ? null : record.localization_conf}
+                        label="localization confidence"
+                      />
+                    </td>
+                    <td className="px-3 text-text-mid">{row.clearance.replace("_", " ")}</td>
+                    <td className="px-3 text-text-mid">{formatAge(record.age_frames / FRAME_RATE)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* per-contact detail (shared with OPS) */}
+      <section
+        aria-label="Contact detail"
+        data-testid="review-detail"
+        data-track-id={selectedId ?? ""}
+        className="min-h-0 overflow-auto rounded-lg bg-surface-1 shadow-card"
+      >
+        {selectedId !== null ? (
+          <ContactDetailPanel />
+        ) : (
+          <div className="flex h-full min-h-[160px] items-center justify-center p-6 text-center">
+            <p className="font-ui text-sm text-text-lo">Select a contact to review its record.</p>
+          </div>
+        )}
+      </section>
+
+      {/* mission timeline */}
+      <section aria-label="Mission timeline" className="min-h-0 overflow-auto rounded-lg bg-surface-1 shadow-card">
+        <MissionLog />
+      </section>
+    </div>
+  );
+}
