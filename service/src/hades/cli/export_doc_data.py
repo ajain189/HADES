@@ -137,3 +137,142 @@ def _localization_strata(seed: int) -> tuple[list[dict[str, Any]], dict[str, Any
             "pitch_bin": s.pitch_bin,
             "n": s.n,
             "median_m": round(s.median_m, 2),
+            "mean_m": round(s.mean_m, 2),
+            "p90_m": round(s.p90_m, 2),
+            "max_m": round(s.max_m, 2),
+            "coverage": round(s.coverage, 3),
+            "kind": "sim",
+        }
+        for s in report.strata
+        if s.n > 0
+    ]
+    moving = {
+        "convergence": report.moving.convergence,
+        "median_r95_m": round(report.moving.median_r95_m, 1),
+        "actionability_class": report.moving.actionability_class,
+        "kind": "sim",
+    }
+    return strata, moving
+
+
+def _coverage_matrix(seed: int, n_trials: int) -> list[dict[str, Any]]:
+    """Run the real coverage matrix; return one row per (sim, fuser) noise pairing."""
+    from hades.eval.coverage import run_coverage_matrix
+
+    return [
+        {
+            "name": r.name,
+            "coverage": round(r.coverage, 3),
+            "mean_nees": round(r.mean_nees, 2),
+            "median_r95_m": round(r.median_r95_m, 2),
+            "n_frames": r.n_frames,
+            "n_trials": r.n_trials,
+            "kind": "sim",
+        }
+        for r in run_coverage_matrix(n_trials=n_trials, seed=seed)
+    ]
+
+
+# --- writers ----------------------------------------------------------------------------
+
+
+def _write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
+    with path.open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for row in rows:
+            w.writerow({k: _csv_cell(row[k]) for k in fields})
+
+
+def _csv_cell(v: Any) -> Any:
+    """Booleans render as lowercase json-style so CSV consumers parse them uniformly."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    return v
+
+
+def _write_json(path: Path, obj: Any) -> None:
+    path.write_text(json.dumps(obj, indent=2) + "\n")
+
+
+def export_all(out_dir: Path, *, seed: int = 0, coverage_trials: int = 200) -> dict[str, Any]:
+    """Write all four metric families to flat files under `out_dir`; return the manifest."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    _write_csv(out_dir / "detection_conf_sweep.csv", DETECTION_CONF_SWEEP,
+               ["conf", "recall", "precision"])
+    _write_csv(out_dir / "detection_resolution.csv", DETECTION_RESOLUTION,
+               ["resolution", "recall", "precision", "chosen"])
+    _write_json(out_dir / "detection_quant_delta.json", DETECTION_QUANT_DELTA)
+
+    strata, moving = _localization_strata(seed)
+    _write_csv(out_dir / "localization_strata.csv", strata,
+               ["range_bin", "pitch_bin", "n", "median_m", "mean_m", "p90_m", "max_m",
+                "coverage", "kind"])
+    _write_json(out_dir / "localization_moving.json", moving)
+    _write_csv(out_dir / "coverage_matrix.csv", _coverage_matrix(seed, coverage_trials),
+               ["name", "coverage", "mean_nees", "median_r95_m", "n_frames", "n_trials", "kind"])
+
+    _write_csv(out_dir / "fps_by_resolution.csv", FPS_BY_RESOLUTION,
+               ["resolution", "fps", "median_ms", "gate_fps"])
+    _write_csv(out_dir / "ane_speedup.csv", ANE_SPEEDUP,
+               ["compute_unit", "latency_ms", "speedup"])
+    _write_json(out_dir / "latency_budget.json", LATENCY_BUDGET)
+
+    _write_json(out_dir / "qualitative_refs.json", QUALITATIVE_REFS)
+
+    manifest = _manifest()
+    _write_json(out_dir / "manifest.json", manifest)
+    return manifest
+
+
+def _manifest() -> dict[str, Any]:
+    """Tie every data file to the artifact it came from - the traceability contract."""
+    return {
+        "seed": 0,
+        "families": [
+            {"family": "detection", "file": "detection_conf_sweep.csv",
+             "source": "docs/plans/p2.5-acceptance.md (confidence sweep)"},
+            {"family": "detection", "file": "detection_resolution.csv",
+             "source": "docs/plans/p2.5-training-results.md (resolution table)"},
+            {"family": "detection", "file": "detection_quant_delta.json",
+             "source": "docs/plans/p2.5-acceptance.md (FP16 vs .pt)"},
+            {"family": "localization", "file": "localization_strata.csv",
+             "source": "eval/locsim_report.py run_meter_error_report seed=0 (sim)"},
+            {"family": "localization", "file": "localization_moving.json",
+             "source": "eval/locsim_report.py moving-target row seed=0 (sim)"},
+            {"family": "localization", "file": "coverage_matrix.csv",
+             "source": "eval/coverage.py run_coverage_matrix seed=0 (sim)"},
+            {"family": "real_time", "file": "fps_by_resolution.csv",
+             "source": "docs/plans/spike-latency-results.md (ANE FPS)"},
+            {"family": "real_time", "file": "ane_speedup.csv",
+             "source": "docs/plans/spike-latency-results.md (ANE placement)"},
+            {"family": "real_time", "file": "latency_budget.json",
+             "source": "docs/plans/p5-latency-budget.md (in-app p95, floor)"},
+            {"family": "qualitative", "file": "qualitative_refs.json",
+             "source": "docs/assets/p5,p6 + fixtures/models (figure references)"},
+        ],
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="hades-export-doc-data", description=__doc__)
+    parser.add_argument(
+        "--out", type=Path,
+        default=Path(__file__).resolve().parents[4] / "docs" / "documentation" / "data",
+        help="output directory for the flat data files",
+    )
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--coverage-trials", type=int, default=200,
+        help="trials per coverage row (more = tighter, slower)",
+    )
+    args = parser.parse_args(argv)
+
+    manifest = export_all(args.out, seed=args.seed, coverage_trials=args.coverage_trials)
+    print(f"wrote {len(manifest['families'])} data files to {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
