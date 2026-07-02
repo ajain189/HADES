@@ -115,4 +115,3 @@
 - This reworks/replaces the original P5 single-screen scope; the demo website (P6) and docs (P7) inherit the new multi-page UI + light system automatically (shared UI code).
 - Investigation (Stage 0) gates the fix — the map's real cause must be named before fixing.
 - Light theme = full palette flip → Stage 4 retrofit is the heavy part; budget for it.
-<!-- TODO(tw39): revisit -->
