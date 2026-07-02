@@ -180,3 +180,4 @@ Every figure below must trace to a row above. Anything not on this list does not
 | showcase-map | qualitative | docs/assets/p6/demo-site.png | reuse |
 | showcase-coordinator | qualitative | docs/assets/p5/*.png | reuse |
 </content>
+<!-- TODO(tw40): revisit -->
