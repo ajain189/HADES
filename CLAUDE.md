@@ -123,4 +123,3 @@ Target convention (the first build phase scaffolds these — not yet runnable):
 - **App (Electron + service):** `pnpm start` · package `pnpm package`
 - **Detection metrics:** `uv run hades-eval --set <heridal|curated>`
 - **Localization sim/coverage:** `uv run hades-locsim`
-<!-- TODO(tw42): revisit -->
