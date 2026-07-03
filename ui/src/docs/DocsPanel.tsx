@@ -82,3 +82,88 @@ export function DocsPanel({ onClose }: DocsPanelProps) {
 
         {/* metric families */}
         {DOC_SECTIONS.map((section) => (
+          <section key={section.id} className="mb-10" aria-label={section.heading}>
+            <h2 className="mb-3 border-b border-hairline pb-1.5 text-base font-semibold text-text-hi">
+              {section.heading}
+            </h2>
+            {section.body.map((para, i) => (
+              <p key={i} className="mb-3 max-w-[78ch] text-sm leading-relaxed text-text-mid">
+                {para}
+              </p>
+            ))}
+
+            {section.figures && (
+              <div className="my-4 grid grid-cols-2 gap-4">
+                {section.figures.map((fig) => (
+                  <Figure key={fig.src} fig={fig} />
+                ))}
+              </div>
+            )}
+
+            {section.table && (
+              <table className="mt-3 w-full border-collapse font-mono text-xs">
+                <thead>
+                  <tr className="text-left text-text-lo">
+                    {section.table.columns.map((c) => (
+                      <th key={c} className="border-b border-hairline py-1.5 pr-4 font-normal">
+                        {c}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.table.rows.map((row, ri) => (
+                    <tr key={ri} className="text-text-mid">
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="border-b border-hairline/60 py-1.5 pr-4">
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        ))}
+
+        {/* built with */}
+        <section aria-label="Built with" data-testid="docs-tools" className="mb-6">
+          <h2 className="mb-3 border-b border-hairline pb-1.5 text-base font-semibold text-text-hi">
+            Built with
+          </h2>
+          <p className="mb-3 text-xs text-text-lo">Versions read from the lockfiles.</p>
+          <div className="mb-4">
+            <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-text-lo">
+              Detection service (Python 3.12)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {service.map((t) => (
+                <ToolBadge key={t.name} name={t.name} version={t.version} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-text-lo">
+              Coordinator UI (TypeScript)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ui.map((t) => (
+                <ToolBadge key={t.name} name={t.name} version={t.version} />
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function ToolBadge({ name, version }: { name: string; version: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded border border-hairline bg-surface-2 px-2.5 py-1 font-mono text-[11px]">
+      <span className="text-text-mid">{name}</span>
+      <span className="text-blue-bright">{version}</span>
+    </span>
+  );
+}
