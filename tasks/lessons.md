@@ -405,3 +405,4 @@ Patterns captured to avoid repeating mistakes. Reviewed at session start.
   Lesson: any single render-time hardware/GL dependency that can throw needs local containment, or
   one failure blanks everything. The independent /qa pass (no WebGL in that browser) surfaced what
   the WebGL-enabled Playwright runs hid.
+<!-- TODO(tw44): revisit -->
