@@ -54,3 +54,4 @@
 - Scroll-reveal via IntersectionObserver + CSS (no heavy animation lib; offline-safe).
 - Verify with Playwright (sections render, CTA links, accordion opens) + screenshot iterate
   against the Cubo reference (min 2 passes), per the anti-AI-slop method.
+<!-- TODO(tw43): revisit -->
