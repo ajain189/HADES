@@ -1,0 +1,139 @@
+/* Landing-page-only styles (CuboCruise-style demonstration site) + the SMOOTH scroll-motion
+ * layer. Pure-white marketing surface with one black moment, giant display type, maximal
+ * whitespace — distinct from the operational console. Display = B612 (bundled, cockpit), so it's
+ * clean like Cubo's Inter but distinctively HADES. Motion is transform-only (GPU) and entirely
+ * reduced-motion-aware. */
+
+.landing {
+  --paper: #ffffff;
+  --paper-alt: #f6f5f2;
+  --ink: #0b0b0c;
+  --ink-soft: #5a5a5e;
+  --ink-faint: #9a9a9e;
+  --hairline: #e7e6e2;
+  --accent: #e8531f; /* survivor-orange — used VERY sparingly */
+
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "B612", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.landing .display {
+  font-family: "B612", "IBM Plex Sans", sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+.landing .mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* ---------- scroll progress bar (top of the page) ---------- */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  z-index: 100;
+  transform-origin: left;
+  will-change: transform;
+}
+
+/* ---------- staggered reveal (smoother easing + optional stagger via --d) ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--d, 0ms);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- scrub parallax: elements read their own `--p` (0→1 through viewport) ---------- */
+/* hero media floats up + scales slightly as you scroll past it (depth) */
+.scrub-hero-media {
+  transform: translate3d(0, calc((var(--p, 0) - 0.5) * -60px), 0) scale(calc(1 + var(--p, 0) * 0.04));
+  will-change: transform;
+}
+/* the giant hero word drifts up faster than the page (classic parallax) */
+.scrub-hero-word {
+  transform: translate3d(0, calc(var(--p, 0) * -40px), 0);
+  will-change: transform;
+}
+/* section media drifts gently for depth */
+.scrub-rise {
+  transform: translate3d(0, calc((0.5 - var(--p, 0)) * 36px), 0);
+  will-change: transform;
+}
+
+/* ---------- pinned hero: content scrolls OVER it (the "overlay" feel) ---------- */
+.pin-hero {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+.over-panel {
+  position: relative;
+  z-index: 2;
+  background: var(--paper);
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  box-shadow: 0 -24px 60px -20px rgba(11, 11, 12, 0.18);
+}
+
+/* ---------- the pill CTA + interactive depth ---------- */
+.landing .pill {
+  border-radius: 999px;
+  transition:
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s ease,
+    opacity 0.18s ease;
+}
+.landing .pill:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -8px rgba(11, 11, 12, 0.35);
+}
+.landing .pill:active {
+  transform: translateY(0);
+}
+
+/* feature/metric cards lift on hover (smooth) */
+.lift {
+  transition:
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s ease,
+    border-color 0.35s ease;
+  will-change: transform;
+}
+.lift:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 50px -24px rgba(11, 11, 12, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .scrub-hero-media,
+  .scrub-hero-word,
+  .scrub-rise {
+    transform: none !important;
+  }
+  .lift:hover,
+  .landing .pill:hover {
+    transform: none;
+  }
+}
