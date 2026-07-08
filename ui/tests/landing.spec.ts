@@ -48,7 +48,10 @@ test("home renders the hero, partner logos, real metrics, and no demo links", as
   // the demo console is not linked from the site, anywhere
   await expect(page.locator('a[href*="demo"], a[href*="index.html"]')).toHaveCount(0);
 
-  // recognition strip: all four partner logos resolve
+  // recognition strip: all four partner logos resolve. They are lazy-loaded below the tall
+  // hero, so scroll them into view and wait for decode before asserting naturalWidth.
+  await page.evaluate(() => document.querySelector(".logo-strip")?.scrollIntoView());
+  await page.waitForTimeout(800);
   for (const alt of [
     "Duke Pratt School of Engineering",
     "MIT CSAIL",
@@ -57,7 +60,9 @@ test("home renders the hero, partner logos, real metrics, and no demo links", as
   ]) {
     const img = page.getByAltText(alt).first();
     await expect(img).toBeAttached();
-    expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+    await expect
+      .poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth), { timeout: 8000 })
+      .toBeGreaterThan(0);
   }
 
   // the real, honest metric figures (count-up targets). Jump to the bottom so the metrics
