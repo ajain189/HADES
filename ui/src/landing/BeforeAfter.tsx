@@ -64,9 +64,11 @@ export function BeforeAfter() {
       onPointerMove={(e) => dragging.current && setFromClientX(e.clientX)}
       onPointerUp={() => (dragging.current = false)}
     >
-      <img src={`${BASE}landing/ba-before.jpg`} alt="Aerial search frame, unaided eye" draggable={false} />
+      {/* base layer = the HADES-detections frame; the unaided frame is clipped ON TOP from the
+          LEFT, so the divider wipes: left of the handle = unaided eye, right = HADES contacts */}
+      <img src={`${BASE}landing/ba-after.jpg`} alt="Same frame with HADES detections" draggable={false} />
       <div className="ba-top" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
-        <img src={`${BASE}landing/ba-after.jpg`} alt="Same frame with HADES detections" draggable={false} />
+        <img src={`${BASE}landing/ba-before.jpg`} alt="Aerial search frame, unaided eye" draggable={false} />
       </div>
       <div
         className="ba-handle"

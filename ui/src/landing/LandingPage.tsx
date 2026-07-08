@@ -206,7 +206,7 @@ function Hero() {
 const STATEMENT =
   "HADES turns a live drone feed into located survivors on a map. Real time detection, real world coordinates, one laptop, no network.";
 function Statement() {
-  const ref = useRef<HTMLParagraphElement>(null);
+  const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el || REDUCED) return;
@@ -228,14 +228,28 @@ function Statement() {
   }, []);
   return (
     <section className="statement">
-      <h2 className="statement-kick" data-reveal>
-        Find them faster.
-      </h2>
-      <p ref={ref} className="statement-text">
-        {STATEMENT.split(" ").map((w, i) => (
-          <span key={i}>{w} </span>
+      <div className="statement-main">
+        <p className="statement-kick" data-reveal="left">
+          The mission
+        </p>
+        <h2 ref={ref} className="statement-text">
+          {STATEMENT.split(" ").map((w, i) => (
+            <span key={i}>{w} </span>
+          ))}
+        </h2>
+      </div>
+      <ul className="statement-points">
+        {[
+          { k: "On-device", v: "The whole loop runs on one laptop with the network off." },
+          { k: "Real-time", v: "Detection at ten frames a second while video plays at thirty." },
+          { k: "Honest", v: "Every contact carries an uncertainty radius, never a false pin." },
+        ].map((p, i) => (
+          <li key={p.k} data-reveal="right" style={{ "--si": String(i) } as React.CSSProperties}>
+            <strong>{p.k}</strong>
+            <span>{p.v}</span>
+          </li>
         ))}
-      </p>
+      </ul>
     </section>
   );
 }
