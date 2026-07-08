@@ -57,6 +57,12 @@ export function useReveals(deps: unknown[] = []) {
     const vh = window.innerHeight;
     const tweens = els.map((el) => {
       const dir = el.getAttribute("data-reveal") || "up";
+      // index among data-reveal SIBLINGS sharing the same parent, so grouped items (metric
+      // grid, card rows, proof points) cascade in rather than popping together.
+      const siblings = el.parentElement
+        ? Array.from(el.parentElement.children).filter((c) => c.hasAttribute("data-reveal"))
+        : [el];
+      const idx = Math.max(0, siblings.indexOf(el));
       // anything already in the top ~90% of the viewport on load animates in immediately
       // (a soft entrance), since it will never scroll DOWN through a below-the-fold trigger.
       const aboveFold = el.getBoundingClientRect().top < vh * 0.9;
@@ -65,9 +71,12 @@ export function useReveals(deps: unknown[] = []) {
           ...TO,
           duration: 1.1,
           ease: "power3.out",
-          delay: 0.2,
+          delay: 0.2 + idx * 0.09,
         });
       }
+      // stagger grouped items by nudging each later sibling's trigger a little further down,
+      // so a row of cards flows in left-to-right instead of all at once
+      const startPct = 90 - Math.min(idx, 4) * 4;
       return gsap.fromTo(
         el,
         FROM[dir] ?? FROM.up,
@@ -76,9 +85,8 @@ export function useReveals(deps: unknown[] = []) {
           ease: "power2.out",
           scrollTrigger: {
             trigger: el,
-            // eases in as it travels from near the bottom to comfortably in view
-            start: "top 90%",
-            end: "top 58%",
+            start: `top ${startPct}%`,
+            end: `top ${startPct - 32}%`,
             scrub: 0.7,
           },
         },
