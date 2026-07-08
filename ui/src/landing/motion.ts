@@ -40,11 +40,12 @@ export function useSmoothScroll() {
  *   data-reveal="zoom"   -> subtle scale-up settle (large imagery)
  */
 const FROM: Record<string, gsap.TweenVars> = {
-  up: { autoAlpha: 0, y: 64 },
-  left: { autoAlpha: 0, x: -90 },
-  right: { autoAlpha: 0, x: 90 },
-  zoom: { autoAlpha: 0, y: 40, scale: 1.06 },
+  up: { autoAlpha: 0, y: 90, filter: "blur(6px)" },
+  left: { autoAlpha: 0, x: -120, filter: "blur(6px)" },
+  right: { autoAlpha: 0, x: 120, filter: "blur(6px)" },
+  zoom: { autoAlpha: 0, y: 60, scale: 1.08, filter: "blur(4px)" },
 };
+const TO: gsap.TweenVars = { autoAlpha: 1, x: 0, y: 0, scale: 1, filter: "blur(0px)" };
 
 export function useReveals(deps: unknown[] = []) {
   useEffect(() => {
@@ -60,27 +61,25 @@ export function useReveals(deps: unknown[] = []) {
       // (a soft entrance), since it will never scroll DOWN through a below-the-fold trigger.
       const aboveFold = el.getBoundingClientRect().top < vh * 0.9;
       if (aboveFold) {
-        return gsap.fromTo(
-          el,
-          FROM[dir] ?? FROM.up,
-          { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 0.9, ease: "power3.out", delay: 0.15 },
-        );
+        return gsap.fromTo(el, FROM[dir] ?? FROM.up, {
+          ...TO,
+          duration: 1.1,
+          ease: "power3.out",
+          delay: 0.2,
+        });
       }
       return gsap.fromTo(
         el,
         FROM[dir] ?? FROM.up,
         {
-          autoAlpha: 1,
-          x: 0,
-          y: 0,
-          scale: 1,
+          ...TO,
           ease: "power2.out",
           scrollTrigger: {
             trigger: el,
             // eases in as it travels from near the bottom to comfortably in view
-            start: "top 92%",
-            end: "top 62%",
-            scrub: 0.6,
+            start: "top 90%",
+            end: "top 58%",
+            scrub: 0.7,
           },
         },
       );
