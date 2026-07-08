@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import sys
 from pathlib import Path
 
 MIN_RECALL = 0.30  # non-degenerate floor; the REAL acceptance floor (0.80) is checked later
