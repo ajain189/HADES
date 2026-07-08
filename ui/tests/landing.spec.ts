@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { test, expect, chromium, type Browser } from "@playwright/test";
 import { preview, type PreviewServer } from "vite";
 
-/* The front-facing DEMONSTRATION site (CuboCruise-style). Asserts the marketing page renders its
- * sections, the live-demo CTA points at the demo build, and the FAQ accordion expands. Runs on
- * the real `dist-landing` build. Precondition: the suite pretest builds it (`vite build --mode
- * landing`). Blueprint: docs/plans/2026-06-26-hades-landing-page.md. */
+/* The front-facing DEMONSTRATION site v2 (all-white 3D hero, hash-routed pages). Asserts the
+ * marketing pages render their sections, the live-demo CTA points at the demo build, the
+ * before/after wipe responds, and the FAQ accordion expands (Technology page). Runs on the real
+ * `dist-landing` build; the suite pretest builds it (`vite build --mode landing`). */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -17,7 +17,6 @@ let browser: Browser;
 let appUrl: string;
 
 test.beforeAll(async () => {
-  // Preview the landing build (its own out dir + landing.html entry).
   server = await preview({
     root: ROOT,
     build: { outDir: "dist-landing" },
@@ -25,6 +24,7 @@ test.beforeAll(async () => {
   });
   appUrl = server.resolvedUrls!.local[0];
   browser = await chromium.launch({
+    // swiftshader so the three.js hero has a WebGL context in headless
     args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
   });
 });
@@ -34,34 +34,85 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
 });
 
-test("the landing page renders the hero, sections, real metrics, and a demo CTA", async () => {
+test("home renders the hero, partner logos, real metrics, and no demo links", async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(`${appUrl}landing.html`, { waitUntil: "networkidle" });
 
-  // hero display word + the what-it-is line
   await expect(page.getByRole("heading", { level: 1, name: "HADES" })).toBeVisible();
-  await expect(page.getByText(/ground-control station for post-hurricane/i).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /find them faster/i }).first()).toBeVisible();
+  await expect(page.getByText(/turns a live drone feed into located survivors/i).first()).toBeVisible();
 
-  // the live-demo CTA points at the demo build (the relative ./index.html)
-  const demo = page.getByRole("link", { name: /live demo/i }).first();
-  await expect(demo).toHaveAttribute("href", /index\.html|\.\//);
+  // the demo console is not linked from the site, anywhere
+  await expect(page.locator('a[href*="demo"], a[href*="index.html"]')).toHaveCount(0);
 
-  // section headings + the real, honest metric figures (scroll-revealed) — scroll the proof
-  // section into view, then assert the metric display figures (not the prose that also cites them)
-  await page.locator("#proof").scrollIntoViewIfNeeded();
-  await expect(page.getByRole("heading", { name: /measured, not claimed/i })).toBeVisible();
-  await expect(page.locator(".mono.display", { hasText: "0.55" })).toBeVisible();
-  await expect(page.locator(".mono.display", { hasText: "22.4" })).toBeVisible();
+  // recognition strip: all four partner logos resolve
+  for (const alt of [
+    "Duke Pratt School of Engineering",
+    "MIT CSAIL",
+    "North Carolina Science and Engineering Fair",
+    "Samsung Solve for Tomorrow",
+  ]) {
+    const img = page.getByAltText(alt).first();
+    await expect(img).toBeAttached();
+    expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+  }
+
+  // the real, honest metric figures (count-up targets)
+  await page.getByRole("heading", { name: /measured, not claimed/i }).scrollIntoViewIfNeeded();
+  await expect(page.locator(".metric-num", { hasText: "0.85" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".metric-num", { hasText: "22.4" })).toBeVisible({ timeout: 10_000 });
 });
 
-test("the FAQ accordion expands an answer on click", async () => {
+test("the before/after wipe reveals detections on drag", async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(`${appUrl}landing.html`, { waitUntil: "networkidle" });
 
-  const q = page.getByRole("button", { name: /does it work without a connection/i });
-  await q.scrollIntoViewIfNeeded();
+  const wrap = page.locator(".ba-wrap");
+  await wrap.scrollIntoViewIfNeeded();
+  await expect(wrap.getByAltText(/same frame with hades detections/i)).toBeAttached();
+
+  // the 3D hero + rail pins insert scroll spacers asynchronously — wait for layout to go
+  // quiet, then re-scroll and measure fresh so the drag coordinates aren't stale
+  await page.waitForTimeout(1200);
+  await wrap.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+
+  const handle = page.locator(".ba-handle");
+  const box = (await wrap.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.85, box.y + box.height * 0.5, { steps: 4 });
+  await page.mouse.up();
+  const after = await handle.evaluate((el) => el.style.left);
+  expect(parseFloat(after)).toBeGreaterThan(70);
+});
+
+test("the technology page answers the connection question (FAQ accordion)", async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(`${appUrl}landing.html#/technology`, { waitUntil: "networkidle" });
+
+  await expect(page.getByRole("heading", { name: /search party/i })).toBeVisible();
+
+  // the first question ("Does it work without a connection?") ships open by default
+  const first = page.getByRole("button", { name: /does it work without a connection/i });
+  await first.scrollIntoViewIfNeeded();
+  await expect(first).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText(/run entirely on the laptop with the network off/i)).toBeVisible();
+
+  // a closed one expands on click
+  const q = page.getByRole("button", { name: /how accurate is the detection/i });
   await expect(q).toHaveAttribute("aria-expanded", "false");
   await q.click();
   await expect(q).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText(/runs entirely on-device with the network off/i)).toBeVisible();
+  await expect(page.getByText(/0\.85 recall on the HERIDAL/i)).toBeVisible();
+});
+
+test("the team page shows the team, the build, and recognition", async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(`${appUrl}landing.html#/team`, { waitUntil: "networkidle" });
+
+  await expect(page.getByRole("heading", { name: /students who/i })).toBeVisible();
+  await expect(page.getByAltText(/the hades team/i)).toBeAttached();
+  await expect(page.getByAltText(/assembled hades airframe/i)).toBeAttached();
+  await expect(page.getByText(/samsung solve for tomorrow/i).first()).toBeVisible();
 });
