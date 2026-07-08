@@ -9,11 +9,17 @@ export const REDUCED =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* Lenis smooth scroll wired into GSAP's ticker (the canonical pairing): one instance for the
- * whole site. Skipped entirely under reduced motion: native scroll is the accessible path. */
+ * whole site. A gentle lerp + a long, soft-tail easing gives the slow-motion, glide-to-rest
+ * feel. Native scroll (no smoothing, no hijack) under reduced motion. */
 export function useSmoothScroll() {
   useEffect(() => {
     if (REDUCED) return;
-    const lenis = new Lenis({ lerp: 0.12, wheelMultiplier: 1 });
+    const lenis = new Lenis({
+      lerp: 0.085, // lower = longer glide; the slow-motion feel
+      wheelMultiplier: 0.9,
+      // an expo-out tail: quick to respond, long soft settle. Wheel/keys still work natively.
+      easing: (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
+    });
     lenis.on("scroll", ScrollTrigger.update);
     const raf = (time: number) => lenis.raf(time * 1000);
     gsap.ticker.add(raf);
@@ -25,21 +31,20 @@ export function useSmoothScroll() {
   }, []);
 }
 
-/* Directional scroll reveals, the Cubo grammar: things slide in from the side they belong to.
+/* Scroll-linked entrances, the Cubo grammar: each element fades + drifts in from the side it
+ * belongs to, SCRUBBED across a scroll range so the motion is tied to scroll position (soft,
+ * slow-motion) rather than snapping on a trigger. Transform/opacity only (GPU, 60fps).
  *   data-reveal          -> rise from below (default)
- *   data-reveal="left"   -> slide in from the left
- *   data-reveal="right"  -> slide in from the right
- *   data-reveal="zoom"   -> settle from 1.06 scale (large imagery)
- * Initial states are applied per-element and animated once when 12% of the element enters.
- * One easing signature sitewide (the Cubo tween), duration 0.9, small stagger within a batch.
+ *   data-reveal="left"   -> from the left
+ *   data-reveal="right"  -> from the right
+ *   data-reveal="zoom"   -> subtle scale-up settle (large imagery)
  */
 const FROM: Record<string, gsap.TweenVars> = {
-  up: { opacity: 0, y: 56 },
-  left: { opacity: 0, x: -72 },
-  right: { opacity: 0, x: 72 },
-  zoom: { opacity: 0, y: 32, scale: 1.05 },
+  up: { autoAlpha: 0, y: 64 },
+  left: { autoAlpha: 0, x: -90 },
+  right: { autoAlpha: 0, x: 90 },
+  zoom: { autoAlpha: 0, y: 40, scale: 1.06 },
 };
-const EASE = "cubic-bezier(0.28, 0.41, 0.56, 1)";
 
 export function useReveals(deps: unknown[] = []) {
   useEffect(() => {
@@ -48,28 +53,44 @@ export function useReveals(deps: unknown[] = []) {
       els.forEach((el) => (el.style.opacity = "1"));
       return;
     }
-    for (const el of els) {
+    const vh = window.innerHeight;
+    const tweens = els.map((el) => {
       const dir = el.getAttribute("data-reveal") || "up";
-      gsap.set(el, { ...(FROM[dir] ?? FROM.up), overwrite: true });
-    }
-    const batch = ScrollTrigger.batch(els, {
-      start: "top 88%",
-      once: true,
-      onEnter: (targets) =>
-        gsap.to(targets, {
-          opacity: 1,
+      // anything already in the top ~90% of the viewport on load animates in immediately
+      // (a soft entrance), since it will never scroll DOWN through a below-the-fold trigger.
+      const aboveFold = el.getBoundingClientRect().top < vh * 0.9;
+      if (aboveFold) {
+        return gsap.fromTo(
+          el,
+          FROM[dir] ?? FROM.up,
+          { autoAlpha: 1, x: 0, y: 0, scale: 1, duration: 0.9, ease: "power3.out", delay: 0.15 },
+        );
+      }
+      return gsap.fromTo(
+        el,
+        FROM[dir] ?? FROM.up,
+        {
+          autoAlpha: 1,
           x: 0,
           y: 0,
           scale: 1,
-          duration: 0.9,
-          ease: EASE,
-          stagger: 0.1,
-          overwrite: true,
-        }),
+          ease: "power2.out",
+          scrollTrigger: {
+            trigger: el,
+            // eases in as it travels from near the bottom to comfortably in view
+            start: "top 92%",
+            end: "top 62%",
+            scrub: 0.6,
+          },
+        },
+      );
     });
     ScrollTrigger.refresh();
     return () => {
-      batch.forEach((t) => t.kill());
+      tweens.forEach((t) => {
+        t.scrollTrigger?.kill();
+        t.kill();
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
