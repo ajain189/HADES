@@ -100,7 +100,6 @@ function Hero() {
     <div className="hero-wrap" ref={wrapRef}>
       <section className="hero">
         <h1 className="hero-word" aria-label="HADES">
-          <img src={A("logo.png")} alt="" className="hero-word-mark" />
           {"HADES".split("").map((ch, i) => (
             <span
               key={i}

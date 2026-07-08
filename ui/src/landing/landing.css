@@ -171,14 +171,6 @@
   transform: translateY(calc(var(--explode, 0) * -7vh));
   pointer-events: none;
 }
-/* the swirl mark joins the wordmark as a lockup, riding the same entrance */
-.hero-word-mark {
-  height: 0.44em;
-  width: auto;
-  margin-right: 0.1em;
-  align-self: center;
-  animation: hero-ch-in 1.1s cubic-bezier(0.2, 0.75, 0.35, 1) both;
-}
 .hero-ch {
   display: inline-block;
   animation: hero-ch-in 1.1s cubic-bezier(0.2, 0.75, 0.35, 1) both;
@@ -936,8 +928,7 @@
     filter: none !important;
   }
   .hero-ch,
-  .hero-word-mark,
-  .hero-steps li,
+    .hero-steps li,
   .site-nav {
     animation: none;
   }
