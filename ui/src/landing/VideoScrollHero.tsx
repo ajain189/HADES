@@ -54,14 +54,21 @@ export function VideoScrollHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivE
       // letterbox edge is invisible
       ctx.fillStyle = "#f7f8f4";
       ctx.fillRect(0, 0, cw, ch);
-      // CONTAIN-fit at 0.92 so the WHOLE drone is always visible (never cropped out of frame),
-      // with margin around it. The drone sits low in the source frame, so anchor it a touch
-      // above center in the visible area for a balanced composition.
-      const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight) * 0.92;
+      // COVER-fit the frame to the viewport width so it reads full and large, then anchor
+      // vertically on the DRONE'S visual center (measured at ~0.62 of frame height, since the
+      // subject sits low with dead space up top) rather than the frame's geometric center.
+      // This pulls the drone up to the viewport's middle and closes the gap under the logo.
+      const scale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
-      const y = (ch - h) / 2 + ch * 0.06;
-      ctx.drawImage(img, (cw - w) / 2, y, w, h);
+      const SUBJECT_CY = 0.62; // frame-fraction where the drone's mass is centered
+      // place the frame so its subject-center lands at 46% of the viewport height (a touch above
+      // middle, so the airframe is optically centered given the props splay downward)
+      const x = (cw - w) / 2;
+      let y = ch * 0.46 - h * SUBJECT_CY;
+      // never expose empty canvas above/below: clamp so the frame always covers the viewport
+      y = Math.min(0, Math.max(ch - h, y));
+      ctx.drawImage(img, x, y, w, h);
     };
 
     // load frame 0 first (paint immediately), then the rest in the background
