@@ -50,24 +50,20 @@ export function VideoScrollHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivE
         canvas.height = ch * dpr;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // near-white studio backdrop, matched to the (lightened) frames' own corner color so any
-      // letterbox edge is invisible
-      ctx.fillStyle = "#f7f8f4";
+      // pure-white backdrop fills whatever the contained frame does not cover
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, cw, ch);
-      // COVER-fit the frame to the viewport width so it reads full and large, then anchor
-      // vertically on the DRONE'S visual center (measured at ~0.62 of frame height, since the
-      // subject sits low with dead space up top) rather than the frame's geometric center.
-      // This pulls the drone up to the viewport's middle and closes the gap under the logo.
-      const scale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
+      // CONTAIN-fit: show the WHOLE frame at (or below) native resolution so it is never
+      // upscaled/blurry and the drone is fully visible. The leftover viewport area is the white
+      // fill above. Never enlarge past 1:1 (min with 1) so quality stays crisp.
+      const fit = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
+      const scale = Math.min(fit, 1) * 0.98;
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
-      const SUBJECT_CY = 0.62; // frame-fraction where the drone's mass is centered
-      // place the frame so its subject-center lands at 46% of the viewport height (a touch above
-      // middle, so the airframe is optically centered given the props splay downward)
+      // horizontally centered; the drone's mass sits low in the frame, so nudge the frame UP a
+      // little so the drone lands near the vertical centre of the viewport
       const x = (cw - w) / 2;
-      let y = ch * 0.46 - h * SUBJECT_CY;
-      // never expose empty canvas above/below: clamp so the frame always covers the viewport
-      y = Math.min(0, Math.max(ch - h, y));
+      const y = (ch - h) / 2 - ch * 0.04;
       ctx.drawImage(img, x, y, w, h);
     };
 
