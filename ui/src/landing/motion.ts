@@ -74,20 +74,23 @@ export function useReveals(deps: unknown[] = []) {
           delay: 0.2 + idx * 0.09,
         });
       }
-      // stagger grouped items by nudging each later sibling's trigger a little further down,
-      // so a row of cards flows in left-to-right instead of all at once
-      const startPct = 90 - Math.min(idx, 4) * 4;
+      // TRIGGER-ONCE with a real time-based duration (NOT scrub): when the element enters view
+      // it plays a full ~0.9s fade+rise regardless of scroll speed. Scrubbed reveals completed
+      // in a fraction of a second under fast/smooth scrolling, so they read as "just there".
+      // The per-sibling stagger makes grouped rows cascade.
       return gsap.fromTo(
         el,
         FROM[dir] ?? FROM.up,
         {
           ...TO,
-          ease: "power2.out",
+          duration: 0.95,
+          ease: "power3.out",
+          delay: idx * 0.1,
           scrollTrigger: {
             trigger: el,
-            start: `top ${startPct}%`,
-            end: `top ${startPct - 32}%`,
-            scrub: 0.7,
+            start: "top 86%",
+            toggleActions: "play none none none",
+            once: true,
           },
         },
       );
