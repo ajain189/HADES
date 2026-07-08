@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { BeforeAfter } from "./BeforeAfter";
 import { DroneHero } from "./DroneHero";
 import { gsap, REDUCED, ScrollTrigger, useParallax, useReveals, useSmoothScroll } from "./motion";
+import { VideoScrollHero } from "./VideoScrollHero";
+
+/* Hero mode switch, kept trivially REVERSIBLE. "video" = the scroll-scrubbed exploded-drone
+ * frame sequence (ffmpeg-extracted). "drone" = the interactive three.js DroneHero. Flip this
+ * one constant to restore the previous hero; nothing else needs to change. */
+const HERO_MODE: "video" | "drone" = "video";
 
 /* HADES demonstration site v3. One family (Archivo), one accent (the logo teal), warm
  * tinted neutrals, native-sticky pinning, and a hero you can grab. Every product image is
@@ -161,8 +167,9 @@ function Hero() {
     };
   }, []);
 
+  const video = HERO_MODE === "video";
   return (
-    <div className="hero-wrap" ref={wrapRef}>
+    <div className={`hero-wrap ${video ? "hero-wrap-video" : ""}`} ref={wrapRef}>
       {/* the docking lockup lives OUTSIDE the sticky/overflow-hidden hero so its position:fixed
           is anchored to the viewport and never clipped when the hero releases */}
       <a href="#/" ref={lockRef} className="hero-lock" aria-label="HADES home">
@@ -172,7 +179,7 @@ function Hero() {
         </span>
       </a>
       <section className="hero">
-        <DroneHero wrapRef={wrapRef} />
+        {video ? <VideoScrollHero wrapRef={wrapRef} /> : <DroneHero wrapRef={wrapRef} />}
 
         <p className="hero-desc">
           A ground control station for post hurricane search and rescue.
