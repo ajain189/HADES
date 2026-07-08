@@ -25,7 +25,10 @@ blob-report/
 *.onnx
 *.pt
 models/
-data/
+# ML dataset staging dir under the Python service ONLY. The old bare `data/` pattern also
+# swallowed `ui/src/data/` (real source) and `docs/documentation/data/` (doc CSVs), which broke
+# the web build on CI. Scope it to the service so source data folders stay tracked.
+/service/data/
 # Trained-model artifacts pulled back from the cluster (best.pt + args.yaml + results.csv +
 # requirements.lock). Versioned artifacts, never committed.
 artifacts/
