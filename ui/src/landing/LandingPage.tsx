@@ -637,7 +637,13 @@ function Footer() {
             <a href="#/team">Team</a>
           </div>
           <div className="footer-col" data-reveal="right">
-            <h3>School</h3>
+            <h3>Project</h3>
+            <a href="https://github.com/ajain189/HADES" rel="noreferrer" target="_blank">
+              GitHub
+            </a>
+            <a href="https://github.com/ajain189/HADES/tree/main/docs" rel="noreferrer" target="_blank">
+              Documentation
+            </a>
             <a href="https://www.ncssm.edu" rel="noreferrer" target="_blank">
               NCSSM
             </a>
