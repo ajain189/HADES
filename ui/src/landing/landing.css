@@ -475,12 +475,17 @@
   gap: 18px;
   will-change: transform;
 }
+/* Cubo card anatomy: number pinned top, text block pinned bottom, the air between is
+ * structure rather than leftover */
 .rail-card {
   flex: none;
+  display: flex;
+  flex-direction: column;
   width: min(400px, 82vw);
+  min-height: 360px;
   background: var(--paper-alt);
   border-radius: 16px;
-  padding: 36px 34px 42px;
+  padding: 30px 32px 34px;
 }
 .rail-card-dark {
   background: var(--black);
@@ -500,10 +505,11 @@
 }
 .rail-title {
   font-size: 27px;
-  margin-top: 16px;
+  margin-top: auto;
+  padding-top: 48px;
 }
 .rail-body {
-  margin-top: 13px;
+  margin-top: 12px;
   color: var(--ink-soft);
   font-size: 15.5px;
 }

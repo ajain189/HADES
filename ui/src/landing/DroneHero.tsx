@@ -121,7 +121,7 @@ export function DroneHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivElement
       if (disposed) return;
 
       const root = gltf.scene;
-      root.position.set(0, -110, 0);
+      root.position.set(0, -96, 0);
       scene.add(root);
 
       // base positions captured in the ROOT's frame; explode = root-frame offset, converted
