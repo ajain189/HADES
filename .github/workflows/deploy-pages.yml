@@ -14,14 +14,11 @@ name: Deploy demo site (GitHub Pages)
 # works at a Netlify/Vercel root or opened from file:// — no base change needed per host.
 
 on:
-  # manual trigger so it never fires unexpectedly during development
+  # MANUAL ONLY. The site is hosted on Vercel, so this GitHub Pages mirror is optional and does
+  # not run on push (it would 404 until Pages is enabled in repo Settings, adding red X noise).
+  # To publish a Pages copy: enable Settings -> Pages -> Source: "GitHub Actions", then run this
+  # workflow from the Actions tab (Run workflow). Re-add the `push:` trigger below to automate it.
   workflow_dispatch: {}
-  # and on pushes that touch the UI once commits resume (safe to keep — gated on the Pages source)
-  push:
-    branches: [main]
-    paths:
-      - "ui/**"
-      - ".github/workflows/deploy-pages.yml"
 
 # Pages deploy needs these scopes + a single in-flight deploy.
 permissions:
