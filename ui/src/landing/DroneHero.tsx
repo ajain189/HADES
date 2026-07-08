@@ -103,9 +103,10 @@ export function DroneHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivElement
       mount.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(32, mount.clientWidth / mount.clientHeight, 1, 5000);
-      camera.position.set(450, 320, 610);
-      camera.lookAt(0, 60, 0);
+      // tighter FOV + closer dolly makes the airframe the dominant object in the hero
+      const camera = new THREE.PerspectiveCamera(30, mount.clientWidth / mount.clientHeight, 1, 5000);
+      camera.position.set(400, 285, 545);
+      camera.lookAt(0, 66, 0);
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.9));
       const key = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -121,7 +122,7 @@ export function DroneHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivElement
       if (disposed) return;
 
       const root = gltf.scene;
-      root.position.set(0, -96, 0);
+      root.position.set(0, -70, 0);
       scene.add(root);
 
       // base positions captured in the ROOT's frame; explode = root-frame offset, converted

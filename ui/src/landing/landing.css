@@ -74,21 +74,36 @@
   box-shadow: 0 1px 0 var(--line);
 }
 .nav-brand {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   text-decoration: none;
   color: var(--ink);
 }
-.nav-brand img {
+/* the docking slot: the destination box the hero lockup travels into. It also renders the
+ * real (interactive) nav brand, revealed only once the hero lockup has arrived. */
+.nav-dock-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 1;
+}
+/* on the home route the visible + clickable brand is the hero lockup that docks here, so the
+ * slot's own copy stays invisible (it is only the measurement target) */
+.site-nav.has-dock .nav-dock-slot {
+  visibility: hidden;
+}
+.nav-dock-slot img {
   height: 30px;
   width: auto;
 }
-.nav-brand span {
+.nav-dock-slot span {
   font-family: "Urbanist Variable", "Urbanist", sans-serif;
   font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  color: var(--ink);
 }
 .nav-links {
   display: flex;
@@ -154,33 +169,52 @@
   background: var(--paper);
 }
 
-/* the giant wordmark, behind the aircraft */
-.hero-word {
-  position: absolute;
-  z-index: 1;
-  top: clamp(58px, 8vh, 108px);
+/* the big HADES lockup: starts large near the top of the hero and is scrubbed (via JS FLIP
+ * transform) down into the navbar as you scroll. position:fixed + transform-origin:top left
+ * so the measured translate/scale to the nav slot stays exact. */
+.hero-lock {
+  position: fixed;
+  /* above the nav's frosted background so it stays visible the whole way down, but the nav
+   * links (z-index on .nav-links) still sit above it on the right */
+  z-index: 61;
+  top: clamp(52px, 7.5vh, 96px);
   left: clamp(20px, 4vw, 56px);
+  text-decoration: none;
+  color: var(--ink);
+  transform-origin: top left;
+  will-change: transform;
+}
+/* the intro (blur/scale/opacity) lives on the inner wrapper so it never fights the
+ * outer element's scroll-driven FLIP transform */
+.hero-lock-inner {
   display: flex;
-  align-items: baseline;
-  font-size: clamp(96px, 15.5vw, 230px);
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 30px);
+  animation: lock-in 1.1s cubic-bezier(0.2, 0.75, 0.35, 1) both;
+}
+/* frozen to its rest state while the dock geometry is measured */
+.hero-lock.is-measuring .hero-lock-inner {
+  animation: none;
+  transform: none;
+  filter: none;
+  opacity: 1;
+}
+.hero-lock-mark {
+  height: clamp(64px, 8.5vw, 128px);
+  width: auto;
+}
+.hero-lock-word {
+  font-family: "Urbanist Variable", "Urbanist", sans-serif;
+  font-size: clamp(72px, 10vw, 168px);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 0.9;
-  color: var(--ink);
-  opacity: calc(1 - var(--explode, 0) * 2.1);
-  transform: translateY(calc(var(--explode, 0) * -7vh));
-  pointer-events: none;
 }
-.hero-ch {
-  display: inline-block;
-  animation: hero-ch-in 1.1s cubic-bezier(0.2, 0.75, 0.35, 1) both;
-  animation-delay: calc(var(--ci, 0) * 65ms);
-}
-@keyframes hero-ch-in {
+@keyframes lock-in {
   from {
     opacity: 0;
-    filter: blur(0.06em);
-    transform: translate(0.06em, 0.22em) scale(1.5) skew(6deg, 3deg);
+    filter: blur(0.05em);
+    transform: translateY(0.16em) scale(1.06);
   }
   to {
     opacity: 1;
@@ -245,27 +279,75 @@
   transform: translateY(-50%);
   text-align: right;
   display: grid;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 540;
-  color: var(--ink);
+  gap: 12px;
+  font-size: clamp(15px, 1.15vw, 18px);
   list-style: none;
   pointer-events: none;
+  /* fade the whole column with the explode so it clears out with the copy */
+  opacity: calc(1 - var(--explode, 0) * 2.6);
 }
-/* the four steps breathe on a continuous cycle, one dark at a time */
+/* a bold weight sweeps through the four, one at a time, on a 4s continuous loop. Each item
+ * is dark + bold + shifted for one quarter of the cycle, then hands off to the next. Font
+ * is Archivo Variable so the weight interpolates smoothly (variation settings, not the
+ * `font-weight` shorthand, to guarantee the axis animates). */
 .hero-steps li {
-  opacity: 0.28;
-  animation: step-cycle 8s linear infinite;
-  animation-delay: calc(var(--si, 0) * 2s);
+  font-variation-settings: "wght" 460;
+  color: var(--ink-faint);
+  transform: translateX(0);
+  animation: step-sweep 6s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+  animation-delay: calc(var(--si, 0) * -1.5s);
+  will-change: font-variation-settings, color, transform;
 }
-@keyframes step-cycle {
+@keyframes step-sweep {
   0%,
-  30%,
   100% {
-    opacity: 0.28;
+    font-variation-settings: "wght" 460;
+    color: var(--ink-faint);
+    transform: translateX(0);
   }
-  6%,
-  22% {
+  8% {
+    font-variation-settings: "wght" 800;
+    color: var(--ink);
+    transform: translateX(-8px);
+  }
+  17% {
+    font-variation-settings: "wght" 800;
+    color: var(--ink);
+    transform: translateX(-8px);
+  }
+  25% {
+    font-variation-settings: "wght" 460;
+    color: var(--ink-faint);
+    transform: translateX(0);
+  }
+}
+/* the teal tick that rides beside the active word */
+.hero-steps li::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  margin-right: 12px;
+  width: 0;
+  height: 2px;
+  background: var(--teal);
+  transform: translateY(-50%);
+  animation: step-tick 6s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+  animation-delay: calc(var(--si, 0) * -1.5s);
+}
+.hero-steps li {
+  position: relative;
+}
+@keyframes step-tick {
+  0%,
+  25%,
+  100% {
+    width: 0;
+    opacity: 0;
+  }
+  8%,
+  17% {
+    width: clamp(20px, 2.4vw, 40px);
     opacity: 1;
   }
 }
@@ -933,18 +1015,30 @@
     transform: none !important;
     filter: none !important;
   }
-  .hero-ch,
-    .hero-steps li,
+  .hero-lock-inner,
+  .hero-steps li,
+  .hero-steps li::before,
   .site-nav {
     animation: none;
   }
   .hero-steps li {
-    opacity: 0.55;
+    color: var(--ink);
+    font-variation-settings: "wght" 540;
+    transform: none;
   }
-  .hero-word,
-  .hero-desc {
+  .hero-lock,
+  .hero-desc,
+  .hero-steps {
     opacity: 1;
     transform: none;
+  }
+  /* reduced motion: no dock scrub, so keep the lockup at its hero size and just show the
+     nav's own brand normally */
+  .hero-lock {
+    position: absolute;
+  }
+  .site-nav.has-dock .nav-dock-slot {
+    opacity: 1;
   }
   .hero-wrap {
     height: auto;

@@ -60,11 +60,16 @@ function Nav({ route }: { route: Route }) {
       {label}
     </a>
   );
+  // on the home route the hero's docking lockup lands in this slot, so the nav's own brand
+  // stays hidden until the dock completes; inner pages have no hero, so show it immediately.
+  const home = route === "home";
   return (
-    <header className={`site-nav ${scrolled ? "is-scrolled" : ""}`}>
+    <header className={`site-nav ${scrolled ? "is-scrolled" : ""} ${home ? "has-dock" : ""}`}>
       <a href="#/" className="nav-brand" aria-label="HADES home">
-        <img src={A("logo.png")} alt="" />
-        <span>HADES</span>
+        <span className="nav-dock-slot" aria-hidden>
+          <img src={A("logo.png")} alt="" />
+          <span>HADES</span>
+        </span>
       </a>
       <nav className="nav-links">
         {link("home", "Overview")}
@@ -92,25 +97,81 @@ function Home() {
   );
 }
 
-/* ---- hero: sticky inside a tall wrapper; the airframe opens as you scroll ---- */
+/* ---- hero: the airframe is the focal point; a big HADES lockup scrubs down into the
+   navbar as you scroll and re-enlarges on the way up (FLIP-style dock). Sticky inside a
+   tall wrapper; the airframe opens on scroll via --explode. ---- */
 const HERO_WORDS = ["Detect", "Localize", "Confirm", "Coordinate"];
 function Hero() {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const lockRef = useRef<HTMLAnchorElement>(null);
+
+  // FLIP dock: measure the hero-size lockup and the navbar target, then scrub between them.
+  useEffect(() => {
+    const lock = lockRef.current;
+    const navSlot = document.querySelector<HTMLElement>(".nav-dock-slot");
+    if (!lock || !navSlot || REDUCED) return;
+
+    let st: ScrollTrigger | undefined;
+    const build = () => {
+      st?.kill();
+      // measure the UNtransformed geometry so the FLIP delta is exact. The intro is a CSS
+      // keyframe animation (scale/translate), so pausing inline transform is not enough:
+      // freeze the keyframes with a measuring class while we read the rects.
+      const inner = lock.querySelector<HTMLElement>(".hero-lock-inner");
+      const prevLock = lock.style.transform;
+      lock.classList.add("is-measuring");
+      lock.style.transform = "none";
+      // measure the slot in its SCROLLED nav state, since that is where the lockup comes to
+      // rest (the nav shrinks its padding once scrolled, moving the slot up a few px)
+      const nav = navSlot.closest(".site-nav");
+      const wasScrolled = nav?.classList.contains("is-scrolled");
+      nav?.classList.add("is-scrolled");
+      // FIRST: the lockup's natural (hero) box. LAST: the navbar slot's box.
+      const a = lock.getBoundingClientRect();
+      const b = navSlot.getBoundingClientRect();
+      if (!wasScrolled) nav?.classList.remove("is-scrolled");
+      lock.style.transform = prevLock;
+      lock.classList.remove("is-measuring");
+      void inner;
+      const dx = b.left - a.left;
+      const dy = b.top - a.top;
+      const scale = b.height / a.height;
+      st = ScrollTrigger.create({
+        trigger: ".hero-wrap",
+        start: "top top",
+        // dock completes over the first ~60vh of scroll (a fixed distance, so it finishes
+        // early and well before the sticky hero releases)
+        end: () => "+=" + window.innerHeight * 0.6,
+        scrub: 0.5,
+        onUpdate: (self) => {
+          const p = self.progress;
+          lock.style.transform = `translate3d(${dx * p}px, ${dy * p}px, 0) scale(${1 + (scale - 1) * p})`;
+        },
+      });
+    };
+    build();
+    // re-measure once fonts + the intro animation have settled (layout can shift subtly)
+    const t = window.setTimeout(build, 1300);
+    const onResize = () => build();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.clearTimeout(t);
+      st?.kill();
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
   return (
     <div className="hero-wrap" ref={wrapRef}>
+      {/* the docking lockup lives OUTSIDE the sticky/overflow-hidden hero so its position:fixed
+          is anchored to the viewport and never clipped when the hero releases */}
+      <a href="#/" ref={lockRef} className="hero-lock" aria-label="HADES home">
+        <span className="hero-lock-inner">
+          <img src={A("logo.png")} alt="" className="hero-lock-mark" />
+          <span className="hero-lock-word">HADES</span>
+        </span>
+      </a>
       <section className="hero">
-        <h1 className="hero-word" aria-label="HADES">
-          {"HADES".split("").map((ch, i) => (
-            <span
-              key={i}
-              className="hero-ch"
-              style={{ "--ci": String((i * 7) % 10) } as React.CSSProperties}
-            >
-              {ch}
-            </span>
-          ))}
-        </h1>
-
         <DroneHero wrapRef={wrapRef} />
 
         <p className="hero-desc">
@@ -178,11 +239,13 @@ const LOGOS = [
 ];
 function LogoStrip() {
   return (
-    <section className="logo-strip" data-reveal>
-      <p className="logo-strip-label">Recognized and supported by</p>
+    <section className="logo-strip">
+      <p className="logo-strip-label" data-reveal>
+        Recognized and supported by
+      </p>
       <div className="logo-strip-row">
         {LOGOS.map((l) => (
-          <img key={l.src} src={A(l.src)} alt={l.alt} style={{ height: l.h }} loading="lazy" />
+          <img key={l.src} src={A(l.src)} alt={l.alt} style={{ height: l.h }} loading="lazy" data-reveal="up" />
         ))}
       </div>
     </section>
@@ -265,7 +328,7 @@ function PipelineRail() {
   }, []);
   return (
     <section className="rail-section" ref={sectionRef}>
-      <div className="section-head rail-head">
+      <div className="section-head rail-head" data-reveal="left">
         <h2 className="section-title">Frame to found.</h2>
       </div>
       <div className="rail-track" ref={trackRef}>
