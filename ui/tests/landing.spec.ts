@@ -40,9 +40,9 @@ test("home renders the hero, partner logos, real metrics, and no demo links", as
 
   // the hero brand lockup (docks into the nav on scroll)
   await expect(page.locator(".hero-lock .hero-lock-word")).toHaveText("HADES");
-  // the statement + promise sit below the tall hero (scrubbed reveals start visibility:hidden,
+  // the mission statement sits below the tall hero (scrubbed reveals start visibility:hidden,
   // so they are absent from the a11y tree; assert presence by class/text, not role)
-  await expect(page.locator(".statement-kick")).toHaveText(/find them faster/i);
+  await expect(page.locator(".statement-kick")).toHaveText(/the mission/i);
   await expect(page.locator(".statement-text")).toContainText(/turns a live drone feed into located survivors/i);
 
   // the demo console is not linked from the site, anywhere
