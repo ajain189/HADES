@@ -50,13 +50,18 @@ export function VideoScrollHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivE
         canvas.height = ch * dpr;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.fillStyle = "#fcfdfd";
+      // near-white studio backdrop, matched to the (lightened) frames' own corner color so any
+      // letterbox edge is invisible
+      ctx.fillStyle = "#f7f8f4";
       ctx.fillRect(0, 0, cw, ch);
-      const scale = Math.max(cw / img.naturalWidth, ch / img.naturalHeight);
-      // bias the crop upward a touch so the airframe sits centered, not buried
+      // CONTAIN-fit at 0.92 so the WHOLE drone is always visible (never cropped out of frame),
+      // with margin around it. The drone sits low in the source frame, so anchor it a touch
+      // above center in the visible area for a balanced composition.
+      const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight) * 0.92;
       const w = img.naturalWidth * scale;
       const h = img.naturalHeight * scale;
-      ctx.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
+      const y = (ch - h) / 2 + ch * 0.06;
+      ctx.drawImage(img, (cw - w) / 2, y, w, h);
     };
 
     // load frame 0 first (paint immediately), then the rest in the background
