@@ -30,7 +30,9 @@ export function VideoScrollHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivE
       return;
     }
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // NOTE: the frame scrub is intentionally NOT gated behind reduced-motion. It is entirely
+    // user-driven (moves only as the user scrolls, no autoplay, no surprise motion), so it is
+    // safe under prefers-reduced-motion and is the hero's primary content, not decoration.
     const images: HTMLImageElement[] = new Array(FRAME_COUNT);
     let loaded = 0;
     let disposed = false;
@@ -78,29 +80,56 @@ export function VideoScrollHero({ wrapRef }: { wrapRef: React.RefObject<HTMLDivE
     }
     images[0] = first;
 
-    let st: ScrollTrigger | undefined;
-    if (!reduced) {
-      st = ScrollTrigger.create({
-        trigger: wrap,
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 0.6,
-        onUpdate: (self) => {
-          state.f = self.progress * (FRAME_COUNT - 1);
-          // fade the hero copy (desc + steps) out over the first third of the scrub so it
-          // never fights the exploding frames; consumed by CSS via --herofade
-          wrap.style.setProperty("--herofade", String(Math.max(0, 1 - self.progress * 3)));
-          paint();
-        },
-      });
-    }
+    // apply progress -> frame + copy fade. Kept as a function so both the ScrollTrigger and a
+    // safety rAF loop can call it; whichever is more current wins.
+    const apply = (progress: number) => {
+      state.f = progress * (FRAME_COUNT - 1);
+      wrap.style.setProperty("--herofade", String(Math.max(0, 1 - progress * 3)));
+      paint();
+    };
 
-    const onResize = () => paint();
+    // scrub:true (not a lerp value) so progress tracks scroll 1:1 — Lenis already smooths the
+    // scroll, and a lerped scrub can visibly stall if the ticker hiccups.
+    const st = ScrollTrigger.create({
+      trigger: wrap,
+      start: "top top",
+      end: "bottom bottom",
+      scrub: true,
+      invalidateOnRefresh: true,
+      onUpdate: (self) => apply(self.progress),
+      onRefresh: (self) => apply(self.progress),
+    });
+    // recompute the trigger's start/end once fonts + the tall layout have settled (some frames
+    // + web fonts land late and shift the page height)
+    requestAnimationFrame(() => ScrollTrigger.refresh());
+
+    // SAFETY NET: an independent rAF that derives progress straight from the wrapper's own
+    // scroll geometry and repaints if it ever diverges. This guarantees the frame can never get
+    // "stuck assembled" while the page is scrolled, even if ScrollTrigger/Lenis misbehave.
+    let safetyRaf = 0;
+    let lastSafe = -1;
+    const safety = () => {
+      safetyRaf = requestAnimationFrame(safety);
+      const r = wrap.getBoundingClientRect();
+      const span = r.height - window.innerHeight;
+      const prog = span > 0 ? Math.min(1, Math.max(0, -r.top / span)) : 0;
+      if (Math.abs(prog - lastSafe) > 0.002) {
+        lastSafe = prog;
+        apply(prog);
+      }
+    };
+    safetyRaf = requestAnimationFrame(safety);
+
+    const onResize = () => {
+      ScrollTrigger.refresh();
+      paint();
+    };
     window.addEventListener("resize", onResize);
 
     return () => {
       disposed = true;
       st?.kill();
+      cancelAnimationFrame(safetyRaf);
       window.removeEventListener("resize", onResize);
       void loaded;
     };

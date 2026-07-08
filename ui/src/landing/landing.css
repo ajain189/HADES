@@ -205,7 +205,7 @@
   /* above the nav's frosted background so it stays visible the whole way down, but the nav
    * links (z-index on .nav-links) still sit above it on the right */
   z-index: 61;
-  top: clamp(52px, 7.5vh, 96px);
+  top: clamp(44px, 5.5vh, 72px);
   left: clamp(20px, 4vw, 56px);
   text-decoration: none;
   color: var(--ink);
@@ -228,12 +228,12 @@
   opacity: 1;
 }
 .hero-lock-mark {
-  height: clamp(64px, 8.5vw, 128px);
+  height: clamp(52px, 6vw, 92px);
   width: auto;
 }
 .hero-lock-word {
   font-family: "Urbanist Variable", "Urbanist", sans-serif;
-  font-size: clamp(72px, 10vw, 168px);
+  font-size: clamp(56px, 7vw, 120px);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 0.9;
@@ -1039,19 +1039,17 @@
     opacity: 1;
     transform: none;
   }
-  /* reduced motion: no dock scrub, so keep the lockup at its hero size and just show the
-     nav's own brand normally */
-  .hero-lock {
-    position: absolute;
-  }
-  .site-nav.has-dock .nav-dock-slot {
-    opacity: 1;
-  }
-  .hero-wrap {
+  /* collapse the tall scroll space ONLY for the drone hero. The video hero's frame scrub +
+     logo dock are user-driven (not decorative motion), so they stay live under reduced motion;
+     without this scoping the scrub would lose its scroll distance and freeze. */
+  .hero-wrap:not(.hero-wrap-video) {
     height: auto;
   }
-  .hero {
+  .hero-wrap:not(.hero-wrap-video) .hero {
     position: relative;
+  }
+  .hero-wrap:not(.hero-wrap-video) .hero-lock {
+    position: absolute;
   }
   .landing .pill:hover,
   .honor-row:hover .honor-arrow,

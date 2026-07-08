@@ -115,7 +115,10 @@ function Hero() {
   useEffect(() => {
     const lock = lockRef.current;
     const navSlot = document.querySelector<HTMLElement>(".nav-dock-slot");
-    if (!lock || !navSlot || REDUCED) return;
+    // the dock is user-scroll-driven (a logo shrinking with scroll, no autoplay / vestibular
+    // trigger), so it runs even under reduced motion — keeps the hero consistent and stops the
+    // large lockup from overlapping content on scroll.
+    if (!lock || !navSlot) return;
 
     let st: ScrollTrigger | undefined;
     const build = () => {
