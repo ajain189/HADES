@@ -573,6 +573,14 @@ function Faq() {
 }
 
 /* =================================================================== TEAM */
+/* the student team: face-in-circle avatars + names. Roles kept short and honest; update names/
+   roles here if fuller attribution is wanted. */
+const TEAM = [
+  { name: "Aarush Jain", role: "Detection & localization", img: "aarush.png" },
+  { name: "Ryan", role: "Airframe & avionics", img: "ryan.png" },
+  { name: "Soham", role: "Systems & integration", img: "soham.png" },
+  { name: "Andy", role: "Coordinator interface", img: "andy.png" },
+];
 function Team() {
   return (
     <main className="page">
@@ -589,10 +597,19 @@ function Team() {
         </p>
       </section>
 
-      <figure className="team-photo" data-reveal="zoom">
-        <img src={A("team.jpg")} alt="The HADES team" />
-        <figcaption>The HADES team, NCSSM</figcaption>
-      </figure>
+      <section className="section section-tight">
+        <ul className="team-grid">
+          {TEAM.map((m) => (
+            <li key={m.name} className="team-member" data-reveal="up">
+              <span className="team-avatar">
+                <img src={A(`team/${m.img}`)} alt={m.name} loading="lazy" />
+              </span>
+              <strong className="team-name">{m.name}</strong>
+              <span className="team-role">{m.role}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section className="section">
         <div className="section-head" data-reveal>

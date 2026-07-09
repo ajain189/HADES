@@ -804,20 +804,48 @@
 }
 
 /* ---------------- team page ---------------- */
-.team-photo {
-  max-width: 1280px;
+/* face-in-circle team grid: consistent circular avatars, name + short role under each */
+.team-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: clamp(28px, 4vw, 56px);
+  max-width: 1080px;
   margin-inline: auto;
-  padding-inline: clamp(20px, 4vw, 56px);
 }
-.team-photo img {
+.team-member {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+.team-avatar {
+  display: block;
+  width: clamp(120px, 14vw, 180px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--paper-alt);
+  box-shadow: var(--ring), 0 12px 24px rgba(16, 21, 19, 0.12);
+  transition: transform 0.35s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.team-member:hover .team-avatar {
+  transform: translateY(-4px);
+}
+.team-avatar img {
   width: 100%;
-  border-radius: 16px;
-  box-shadow: var(--ring);
+  height: 100%;
+  object-fit: cover;
 }
-.team-photo figcaption {
-  margin-top: 13px;
-  font-size: 13.5px;
-  color: var(--ink-faint);
+.team-name {
+  margin-top: 18px;
+  font-family: "Urbanist Variable", "Urbanist", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+.team-role {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink-soft);
 }
 .build-grid {
   display: grid;
