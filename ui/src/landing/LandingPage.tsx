@@ -2,19 +2,12 @@ import { ArrowRight, ArrowUpRight, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { BeforeAfter } from "./BeforeAfter";
-import { DroneHero } from "./DroneHero";
 import { gsap, REDUCED, ScrollTrigger, useParallax, useReveals, useSmoothScroll } from "./motion";
-import { VideoScrollHero } from "./VideoScrollHero";
-
-/* Hero mode switch, kept trivially REVERSIBLE. "video" = the scroll-scrubbed exploded-drone
- * frame sequence (ffmpeg-extracted). "drone" = the interactive three.js DroneHero. Flip this
- * one constant to restore the previous hero; nothing else needs to change. */
-const HERO_MODE: "video" | "drone" = "video";
 
 /* HADES demonstration site v3. One family (Archivo), one accent (the logo teal), warm
- * tinted neutrals, native-sticky pinning, and a hero you can grab. Every product image is
- * real output; every number is measured. No demo links: the site shows, it does not hand
- * out the console. */
+ * tinted neutrals, and a static floating-drone hero (Cubo grammar: the product sits centered
+ * on the page's own background, lifted by a soft shadow). Every product image is real output;
+ * every number is measured. No demo links: the site shows, it does not hand out the console. */
 
 const BASE = import.meta.env.BASE_URL ?? "/";
 const A = (p: string) => `${BASE}landing/${p}`;
@@ -66,16 +59,11 @@ function Nav({ route }: { route: Route }) {
       {label}
     </a>
   );
-  // on the home route the hero's docking lockup lands in this slot, so the nav's own brand
-  // stays hidden until the dock completes; inner pages have no hero, so show it immediately.
-  const home = route === "home";
   return (
-    <header className={`site-nav ${scrolled ? "is-scrolled" : ""} ${home ? "has-dock" : ""}`}>
+    <header className={`site-nav ${scrolled ? "is-scrolled" : ""}`}>
       <a href="#/" className="nav-brand" aria-label="HADES home">
-        <span className="nav-dock-slot" aria-hidden>
-          <img src={A("logo.png")} alt="" />
-          <span>HADES</span>
-        </span>
+        <img src={A("logo.png")} alt="" />
+        <span>HADES</span>
       </a>
       <nav className="nav-links">
         {link("home", "Overview")}
@@ -103,93 +91,54 @@ function Home() {
   );
 }
 
-/* ---- hero: the airframe is the focal point; a big HADES lockup scrubs down into the
-   navbar as you scroll and re-enlarges on the way up (FLIP-style dock). Sticky inside a
-   tall wrapper; the airframe opens on scroll via --explode. ---- */
+/* ---- hero: the Cubo grammar. The drone is a single high-quality static render, centered and
+   floated on the page's OWN background with a soft drop-shadow (no WebGL, no frame sequence).
+   The wordmark sits behind it; a short caption and the four-step verb list frame it. On scroll
+   the drone drifts gently DOWN (parallax lag) while the copy lifts UP into the next section —
+   the "words get picked up by the page" feel. All transform-only, GPU, 60fps. ---- */
 const HERO_WORDS = ["Detect", "Localize", "Confirm", "Coordinate"];
 function Hero() {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const lockRef = useRef<HTMLAnchorElement>(null);
+  const droneRef = useRef<HTMLImageElement>(null);
+  const copyRef = useRef<HTMLDivElement>(null);
 
-  // FLIP dock: measure the hero-size lockup and the navbar target, then scrub between them.
+  // Scroll-linked parallax across the hero's own scroll span: the drone lags DOWN (+y), the copy
+  // leads UP (-y). Continuous + reversible (tracks scroll both directions), the one motion that
+  // stays live under reduced motion because it is user-scroll-driven, not decorative autoplay.
   useEffect(() => {
-    const lock = lockRef.current;
-    const navSlot = document.querySelector<HTMLElement>(".nav-dock-slot");
-    // the dock is user-scroll-driven (a logo shrinking with scroll, no autoplay / vestibular
-    // trigger), so it runs even under reduced motion — keeps the hero consistent and stops the
-    // large lockup from overlapping content on scroll.
-    if (!lock || !navSlot) return;
-
-    let st: ScrollTrigger | undefined;
-    const build = () => {
-      st?.kill();
-      // measure the UNtransformed geometry so the FLIP delta is exact. The intro is a CSS
-      // keyframe animation (scale/translate), so pausing inline transform is not enough:
-      // freeze the keyframes with a measuring class while we read the rects.
-      const inner = lock.querySelector<HTMLElement>(".hero-lock-inner");
-      const prevLock = lock.style.transform;
-      lock.classList.add("is-measuring");
-      lock.style.transform = "none";
-      // measure the slot in its SCROLLED nav state, since that is where the lockup comes to
-      // rest (the nav shrinks its padding once scrolled, moving the slot up a few px)
-      const nav = navSlot.closest(".site-nav");
-      const wasScrolled = nav?.classList.contains("is-scrolled");
-      nav?.classList.add("is-scrolled");
-      // FIRST: the lockup's natural (hero) box. LAST: the navbar slot's box.
-      const a = lock.getBoundingClientRect();
-      const b = navSlot.getBoundingClientRect();
-      if (!wasScrolled) nav?.classList.remove("is-scrolled");
-      lock.style.transform = prevLock;
-      lock.classList.remove("is-measuring");
-      void inner;
-      const dx = b.left - a.left;
-      const dy = b.top - a.top;
-      const scale = b.height / a.height;
-      st = ScrollTrigger.create({
-        trigger: ".hero-wrap",
-        start: "top top",
-        // dock completes over the first ~60vh of scroll (a fixed distance, so it finishes
-        // early and well before the sticky hero releases)
-        end: () => "+=" + window.innerHeight * 0.6,
-        scrub: 0.5,
-        onUpdate: (self) => {
-          const p = self.progress;
-          lock.style.transform = `translate3d(${dx * p}px, ${dy * p}px, 0) scale(${1 + (scale - 1) * p})`;
-        },
-      });
-    };
-    build();
-    // re-measure once fonts + the intro animation have settled (layout can shift subtly)
-    const t = window.setTimeout(build, 1300);
-    const onResize = () => build();
-    window.addEventListener("resize", onResize);
+    if (REDUCED) return;
+    const drone = droneRef.current;
+    const copy = copyRef.current;
+    if (!drone || !copy) return;
+    const tl = gsap.timeline({
+      scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: 0.6 },
+    });
+    tl.fromTo(drone, { yPercent: 0 }, { yPercent: 14, ease: "none" }, 0);
+    tl.fromTo(copy, { yPercent: 0, autoAlpha: 1 }, { yPercent: -46, autoAlpha: 0, ease: "none" }, 0);
     return () => {
-      window.clearTimeout(t);
-      st?.kill();
-      window.removeEventListener("resize", onResize);
+      tl.scrollTrigger?.kill();
+      tl.kill();
     };
   }, []);
 
-  const video = HERO_MODE === "video";
   return (
-    <div className={`hero-wrap ${video ? "hero-wrap-video" : ""}`} ref={wrapRef}>
-      {/* the docking lockup lives OUTSIDE the sticky/overflow-hidden hero so its position:fixed
-          is anchored to the viewport and never clipped when the hero releases */}
-      <a href="#/" ref={lockRef} className="hero-lock" aria-label="HADES home">
-        <span className="hero-lock-inner">
-          <img src={A("logo.png")} alt="" className="hero-lock-mark" />
-          <span className="hero-lock-word">HADES</span>
+    <section className="hero">
+      <div className="hero-copy" ref={copyRef}>
+        <span className="hero-word" aria-hidden>
+          HADES
         </span>
-      </a>
-      <section className="hero">
-        {video ? <VideoScrollHero wrapRef={wrapRef} /> : <DroneHero wrapRef={wrapRef} />}
-
+        <img
+          src={A("drone-poster.png")}
+          alt="The HADES search-and-rescue drone"
+          className="hero-drone"
+          ref={droneRef}
+          draggable={false}
+          fetchPriority="high"
+        />
         <p className="hero-desc">
           A ground control station for post hurricane search and rescue.
           <br />
           Built by students at NCSSM.
         </p>
-
         <ol className="hero-steps" aria-hidden>
           {HERO_WORDS.map((w, i) => (
             <li key={w} style={{ "--si": String(i) } as React.CSSProperties}>
@@ -197,8 +146,8 @@ function Hero() {
             </li>
           ))}
         </ol>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
