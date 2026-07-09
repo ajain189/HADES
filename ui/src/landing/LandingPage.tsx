@@ -108,9 +108,10 @@ function Hero() {
   const droneRef = useRef<HTMLImageElement>(null);
   const copyRef = useRef<HTMLDivElement>(null);
 
-  // Scroll-linked parallax across the hero's own scroll span: the drone lags DOWN (+y), the copy
-  // leads UP (-y). Continuous + reversible (tracks scroll both directions). User-scroll-driven, so
-  // it always runs (see the motion.ts note on why scroll motion is not reduced-motion-gated).
+  // Cubo hero grammar (from teardown): the copy RIDES UP as the page scrolls — it leads slightly
+  // and does NOT fade (the words just get lifted off the top), while the drone LAGS behind with a
+  // gentle downward parallax (~0.85:1) and a barely-there scale-down, so it lingers and floats as
+  // the words leave. Continuous + reversible; user-scroll-driven, so it always runs.
   useEffect(() => {
     const drone = droneRef.current;
     const copy = copyRef.current;
@@ -118,8 +119,10 @@ function Hero() {
     const tl = gsap.timeline({
       scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: 0.6 },
     });
-    tl.fromTo(drone, { yPercent: 0 }, { yPercent: 14, ease: "none" }, 0);
-    tl.fromTo(copy, { yPercent: 0, autoAlpha: 1 }, { yPercent: -46, autoAlpha: 0, ease: "none" }, 0);
+    // drone lags down + shrinks ~1.5% (the Cubo float)
+    tl.fromTo(drone, { yPercent: 0, scale: 1 }, { yPercent: 16, scale: 0.985, ease: "none" }, 0);
+    // copy leads up, NO fade (rides the page off the top like Cubo, not a dissolve)
+    tl.fromTo(copy, { yPercent: 0 }, { yPercent: -22, ease: "none" }, 0);
     return () => {
       tl.scrollTrigger?.kill();
       tl.kill();

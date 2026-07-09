@@ -34,9 +34,9 @@ export function useSmoothScroll() {
     // and Lenis manages scroll anyway, so browser scroll restoration only fights us.
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     const lenis = new Lenis({
-      lerp: 0.085, // lower = longer glide; the slow-motion feel
-      wheelMultiplier: 0.9,
-      // an expo-out tail: quick to respond, long soft settle. Wheel/keys still work natively.
+      // moderate glide (Cubo feel): smoothed + a little inertia, not a heavy 2s luxury glide.
+      lerp: 0.1,
+      wheelMultiplier: 1,
       easing: (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
     });
     lenisInstance = lenis;
