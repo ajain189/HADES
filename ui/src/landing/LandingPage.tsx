@@ -268,7 +268,7 @@ const STEPS = [
   {
     n: "02",
     title: "Localize",
-    body: "Each detection becomes a ray through the aircraft's pose, intersected with the ground: a real coordinate with an honest radius.",
+    body: "Each detection becomes a ray through the aircraft's pose, intersected with the ground to give a real coordinate and an uncertainty radius.",
   },
   {
     n: "03",
@@ -339,7 +339,7 @@ function Showcase() {
         </div>
         <div data-reveal>
           <dt>Honest uncertainty</dt>
-          <dd>Every contact carries a radius you can trust, never a pin that lies.</dd>
+          <dd>Every contact shows an uncertainty radius, not a false-precision pin.</dd>
         </div>
         <div data-reveal="right">
           <dt>Video never blocks</dt>
@@ -480,11 +480,11 @@ function Technology() {
         <ol className="tech-list">
           {[
             {
-              t: "Detection that earns its recall",
+              t: "Detection tuned for aerial search",
               p: "YOLO11s, fine tuned on the HERIDAL and SARD aerial search datasets and exported to Core ML for the Apple Neural Engine. Input resolution 960, chosen because recall peaks there on held out scenes while clearing the frame budget six times over.",
             },
             {
-              t: "Coordinates with honesty attached",
+              t: "Coordinates with an honest radius",
               p: "Each detection is projected by monocular ray to ground intersection from the aircraft's position, altitude, and camera pose. Confirmed contacts are fused across frames with a Monte Carlo uncertainty estimate.",
             },
             {
@@ -515,12 +515,12 @@ function Technology() {
         </div>
         <ul className="craft-list">
           {[
-            { part: "3D printed airframe", role: "A monocoque printed in-house. It carries the whole stack and survives the crashes that teach us." },
+            { part: "3D printed airframe", role: "A monocoque printed in-house. It carries the whole stack and takes the crashes we learn from." },
             { part: "DJI O4 Pro air unit and camera", role: "The digital video link. It flies the survivor's eye view back to the laptop in real time." },
             { part: "F405 flight controller", role: "Keeps the aircraft level and streams attitude and GPS telemetry, which the localizer needs to turn pixels into coordinates." },
             { part: "ELRS receiver", role: "The control link. Long range, low latency, and a second telemetry path over serial." },
-            { part: "2306 motors with 5 inch tri-blades", role: "Four of each. Sized for wind that follows a storm, not for racing." },
-            { part: "6S battery", role: "The flight window. Every design choice upstream is measured against the minutes it buys." },
+            { part: "2306 motors with 5 inch tri-blades", role: "Four of each. Sized for post-storm wind, not for racing." },
+            { part: "6S battery", role: "Sets the flight time. Every choice upstream is weighed against the minutes of air time it costs." },
           ].map((c) => (
             <li key={c.part} className="craft-row" data-reveal="up">
               <strong>{c.part}</strong>
