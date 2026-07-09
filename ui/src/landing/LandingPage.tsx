@@ -275,7 +275,7 @@ const STEPS = [
 function PipelineRail() {
   return (
     <section className="rail-section">
-      <div className="section-head rail-head" data-reveal="left">
+      <div className="section-head rail-head" data-reveal>
         <h2 className="section-title">Frame to found.</h2>
         <p className="section-lede">
           One loop turns a live frame into a located survivor. Each stage feeds the next, and the
@@ -284,16 +284,11 @@ function PipelineRail() {
       </div>
       <div className="flow" data-reveal="up">
         <ol className="flow-track">
-          {STEPS.map((s, i) => (
-            <li key={s.n} className="flow-node" style={{ "--fi": String(i) } as React.CSSProperties}>
+          {STEPS.map((s) => (
+            <li key={s.n} className="flow-node">
               <span className="flow-num">{s.n}</span>
               <h3 className="flow-title">{s.title}</h3>
               <p className="flow-body">{s.body}</p>
-              {i < STEPS.length - 1 && (
-                <span className="flow-arrow" aria-hidden>
-                  <ArrowRight size={18} />
-                </span>
-              )}
             </li>
           ))}
         </ol>

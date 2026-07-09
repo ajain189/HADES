@@ -450,110 +450,120 @@
 
 /* ---------------- pipeline flow diagram (frame -> found) ---------------- */
 .rail-section {
-  padding: clamp(88px, 12vh, 160px) clamp(20px, 4vw, 56px);
+  padding: clamp(96px, 13vh, 168px) clamp(20px, 4vw, 56px);
   background: var(--paper);
 }
+/* header centered over the (centered) diagram so the whole block reads as one composition */
 .rail-head {
-  max-width: 760px;
-  margin-bottom: clamp(40px, 6vh, 72px);
+  max-width: 640px;
+  margin: 0 auto clamp(56px, 8vh, 88px);
+  text-align: center;
 }
-/* the diagram: four stage nodes in a connected row, sitting on the dark "offline" foundation */
 .flow {
-  max-width: 1280px;
+  max-width: 1180px;
   margin-inline: auto;
-  border-radius: 24px;
-  background: var(--paper-alt);
-  padding: clamp(24px, 3vw, 40px);
 }
+/* the numbered pipeline: four stages in a row, each led by a numbered node. A single connecting
+ * line runs THROUGH the node centers (a real spine) so it reads as one pipeline, not four cards. */
 .flow-track {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0;
+  column-gap: clamp(20px, 3vw, 48px);
 }
 .flow-node {
   position: relative;
-  padding: 22px clamp(18px, 1.8vw, 30px) 26px;
+  padding-top: 64px;
 }
-/* a hairline between adjacent nodes reads as one connected pipeline, not four cards */
-.flow-node + .flow-node {
-  border-left: 1px solid var(--line);
-}
+/* the numbered marker sits at the top of each column, on the spine */
 .flow-num {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--teal);
-  font-variant-numeric: tabular-nums;
-}
-.flow-title {
-  margin-top: 12px;
-  font-size: clamp(19px, 1.5vw, 24px);
-}
-.flow-body {
-  margin-top: 10px;
-  color: var(--ink-soft);
-  font-size: 14.5px;
-  line-height: 1.5;
-}
-/* the connector arrow: sits in the gutter between nodes, on the node's center line */
-.flow-arrow {
   position: absolute;
-  top: 30px;
-  right: -10px;
-  z-index: 2;
+  top: 0;
+  left: 0;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   background: var(--paper);
+  border: 1.5px solid var(--teal);
   color: var(--teal);
-  box-shadow: var(--ring);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+/* the connecting spine: a hairline through the marker centers (22px = half the 44px marker),
+ * drawn from each node's marker to the next. The last node has none (nothing after it). */
+.flow-node::after {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: 44px;
+  right: calc(-1 * clamp(20px, 3vw, 48px));
+  height: 1.5px;
+  background: var(--line);
+  z-index: 1;
+}
+.flow-node:last-child::after {
+  display: none;
+}
+.flow-title {
+  margin-top: 24px;
+  font-size: clamp(20px, 1.6vw, 26px);
+}
+.flow-body {
+  margin-top: 12px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.6;
 }
 /* the foundation: the dark bar the whole loop rests on */
 .flow-base {
-  margin-top: 22px;
+  margin-top: clamp(40px, 6vh, 64px);
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
-  gap: clamp(16px, 2vw, 32px);
+  gap: clamp(20px, 3vw, 48px);
   background: var(--black);
   color: #fff;
-  border-radius: 16px;
-  padding: 22px clamp(24px, 3vw, 36px);
+  border-radius: 20px;
+  padding: clamp(26px, 3vw, 38px) clamp(28px, 3.5vw, 44px);
 }
 .flow-base-label {
   font-family: "Urbanist Variable", "Urbanist", sans-serif;
-  font-size: clamp(18px, 1.5vw, 22px);
+  font-size: clamp(19px, 1.6vw, 24px);
   font-weight: 700;
   color: var(--teal);
   white-space: nowrap;
 }
 .flow-base-body {
-  font-size: 14.5px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
   color: rgba(255, 255, 255, 0.74);
+  max-width: 62ch;
 }
 @media (max-width: 899px) {
   .flow-track {
     grid-template-columns: 1fr;
+    row-gap: 40px;
   }
-  .flow-node + .flow-node {
-    border-left: none;
-    border-top: 1px solid var(--line);
+  /* vertical stack: the spine runs DOWN from each marker to the next */
+  .flow-node {
+    padding-top: 0;
+    padding-left: 64px;
   }
-  /* arrows point DOWN the vertical stack on narrow screens */
-  .flow-arrow {
-    top: auto;
-    bottom: -10px;
+  .flow-node::after {
+    top: 44px;
+    left: 22px;
     right: auto;
-    left: 30px;
-    transform: rotate(90deg);
+    bottom: calc(-40px);
+    width: 1.5px;
+    height: auto;
   }
   .flow-base {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 10px;
   }
 }
 
