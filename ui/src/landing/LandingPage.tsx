@@ -369,8 +369,10 @@ function Inspiration() {
           </p>
         </div>
         <figure className="inspo-photo" data-reveal="right" data-parallax="0.06">
-          <img src={A("team.jpg")} alt="The HADES team at NCSSM" />
-          <figcaption>The team, at school in Durham</figcaption>
+          <img src={A("team.jpg")} alt="The HADES team at NCSSM with the Samsung hardware they won" />
+          <figcaption>
+            The team with the $10,000 in Samsung hardware we won through Samsung Solve for Tomorrow.
+          </figcaption>
         </figure>
       </div>
     </section>
