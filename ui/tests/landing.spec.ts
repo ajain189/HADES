@@ -24,7 +24,6 @@ test.beforeAll(async () => {
   });
   appUrl = server.resolvedUrls!.local[0];
   browser = await chromium.launch({
-    // swiftshader so the three.js hero has a WebGL context in headless
     args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
   });
 });
@@ -38,8 +37,9 @@ test("home renders the hero, partner logos, real metrics, and no demo links", as
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(`${appUrl}landing.html`, { waitUntil: "networkidle" });
 
-  // the hero brand lockup (docks into the nav on scroll)
-  await expect(page.locator(".hero-lock .hero-lock-word")).toHaveText("HADES");
+  // the static floating-drone hero: the HADES wordmark + the drone render
+  await expect(page.locator(".hero-word")).toHaveText("HADES");
+  await expect(page.locator(".hero-drone")).toBeVisible();
   // the mission statement sits below the tall hero (scrubbed reveals start visibility:hidden,
   // so they are absent from the a11y tree; assert presence by class/text, not role)
   await expect(page.locator(".statement-kick")).toHaveText(/the mission/i);
@@ -81,8 +81,8 @@ test("the before/after wipe reveals detections on drag", async () => {
   await wrap.scrollIntoViewIfNeeded();
   await expect(wrap.getByAltText(/same frame with hades detections/i)).toBeAttached();
 
-  // the 3D hero + rail pins insert scroll spacers asynchronously — wait for layout to go
-  // quiet, then re-scroll and measure fresh so the drag coordinates aren't stale
+  // reveals settle asynchronously — wait for layout to go quiet, then re-scroll and measure
+  // fresh so the drag coordinates aren't stale
   await page.waitForTimeout(1200);
   await wrap.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
@@ -127,7 +127,8 @@ test("the team page shows the team, the build, and recognition", async () => {
   await page.goto(`${appUrl}landing.html#/team`, { waitUntil: "networkidle" });
 
   await expect(page.getByRole("heading", { name: /students who/i })).toBeVisible();
-  await expect(page.getByAltText(/the hades team/i)).toBeAttached();
+  // the face-in-circle team grid: one avatar per member
+  await expect(page.locator(".team-member")).toHaveCount(4);
   await expect(page.getByAltText(/assembled hades airframe/i)).toBeAttached();
   await expect(page.getByText(/samsung solve for tomorrow/i).first()).toBeAttached();
 });
