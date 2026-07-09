@@ -613,10 +613,23 @@
   max-width: 1280px;
   padding-right: clamp(20px, 4vw, 56px);
 }
+/* DEFAULT (no horizontal scrub): a wrapping grid so ALL FIVE cards — including 05 — are always
+ * on screen with no horizontal scroll. This is the fail-safe state: it renders whenever the JS
+ * drift is not active (reduced motion, narrow viewport, or any misfire). The `.rail-section`'s
+ * right padding is restored here so the wrapped grid isn't flush to the edge. */
 .rail-track {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
   gap: 18px;
+  padding-right: clamp(20px, 4vw, 56px);
   will-change: transform;
+}
+/* ACTIVE horizontal scrub (JS-confirmed, desktop, motion allowed): the signature single-row rail
+ * that drifts sideways on scroll. Fixed-width cards in a nowrap flex row; the JS translates it. */
+.rail-track.is-scrubbing {
+  display: flex;
+  grid-template-columns: none;
+  padding-right: 0;
 }
 /* Cubo card anatomy: number pinned top, text block pinned bottom, the air between is
  * structure rather than leftover */
@@ -624,14 +637,18 @@
  * tight block. Equal min-height keeps the row aligned; the block sits at the TOP so short and
  * long cards read as one intentional grid rather than bottom-ragged. */
 .rail-card {
-  flex: none;
   display: flex;
   flex-direction: column;
-  width: min(400px, 82vw);
   min-height: 340px;
   background: var(--paper-alt);
   border-radius: 16px;
   padding: 34px 34px 36px;
+}
+/* in the drifting single-row rail the cards are a fixed width and never shrink; in the wrapped
+ * grid fallback they fill their grid cell (auto width) so the row packs cleanly. */
+.rail-track.is-scrubbing .rail-card {
+  flex: none;
+  width: min(400px, 82vw);
 }
 .rail-card-dark {
   background: var(--black);
@@ -665,11 +682,9 @@
   .rail-section {
     padding-right: clamp(20px, 4vw, 56px);
   }
+  /* narrow viewports never scrub — one full-width card per row */
   .rail-track {
-    flex-direction: column;
-  }
-  .rail-card {
-    width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1076,8 +1091,10 @@
 
 /* ---------------- reduced motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
+  /* reveals under reduced motion do an OPACITY-ONLY fade (driven by GSAP in useReveals), so we
+   * do NOT force them visible here — that would fight the fade. We only strip any positional
+   * transform/filter so the reveal is purely an opacity change, never a slide or blur. */
   .landing [data-reveal] {
-    opacity: 1 !important;
     transform: none !important;
     filter: none !important;
   }

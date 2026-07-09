@@ -329,6 +329,11 @@ function PipelineRail() {
     const section = sectionRef.current;
     const track = trackRef.current;
     if (!section || !track || REDUCED || window.innerWidth < 900) return;
+    // Mark the track as actively scrubbing ONLY when the horizontal drift really runs. The CSS
+    // uses this class to keep the fixed-width horizontal row; without it (reduced motion, narrow
+    // viewport, or any misfire) the track wraps so all five cards — including 05 — stay reachable
+    // with no horizontal scroll. This is the fail-safe that keeps card 05 from falling off-screen.
+    track.classList.add("is-scrubbing");
     const overflow = () => Math.max(0, track.scrollWidth - section.clientWidth + 96);
     const tween = gsap.fromTo(
       track,
@@ -346,6 +351,7 @@ function PipelineRail() {
       },
     );
     return () => {
+      track.classList.remove("is-scrubbing");
       tween.scrollTrigger?.kill();
       tween.kill();
     };

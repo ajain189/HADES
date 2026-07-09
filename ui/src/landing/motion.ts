@@ -50,9 +50,36 @@ const TO: gsap.TweenVars = { autoAlpha: 1, x: 0, y: 0, scale: 1, filter: "blur(0
 export function useReveals(deps: unknown[] = []) {
   useEffect(() => {
     const els = gsap.utils.toArray<HTMLElement>("[data-reveal]");
-    if (REDUCED || els.length === 0) {
-      els.forEach((el) => (el.style.opacity = "1"));
-      return;
+    if (els.length === 0) return;
+    // Under reduced motion we DON'T kill the reveal to a static state — that left the page
+    // lifeless (and, worse, depended on other scroll animations that share this gate). Instead,
+    // every element still reveals on scroll, but as an OPACITY-ONLY fade: no translate, no blur,
+    // no scale. This respects the intent of the setting (zero positional/vestibular motion) while
+    // the content still animates in, exactly the Cubo approach. Content is never left hidden.
+    if (REDUCED) {
+      const tweens = els.map((el) => {
+        const aboveFold = el.getBoundingClientRect().top < window.innerHeight * 0.9;
+        if (aboveFold) {
+          return gsap.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6, ease: "none", delay: 0.1 });
+        }
+        return gsap.fromTo(
+          el,
+          { autoAlpha: 0 },
+          {
+            autoAlpha: 1,
+            duration: 0.5,
+            ease: "none",
+            scrollTrigger: { trigger: el, start: "top 92%", toggleActions: "play none none none", once: true },
+          },
+        );
+      });
+      ScrollTrigger.refresh();
+      return () => {
+        tweens.forEach((t) => {
+          t.scrollTrigger?.kill();
+          t.kill();
+        });
+      };
     }
     const vh = window.innerHeight;
     const tweens = els.map((el) => {
