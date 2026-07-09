@@ -144,9 +144,8 @@ function Hero() {
           fetchPriority="high"
         />
         <p className="hero-desc">
-          A ground control station for post hurricane search and rescue.
-          <br />
-          Built by students at NCSSM.
+          An end to end system for post hurricane search and rescue: drone, detection, and
+          ground control.
         </p>
         <ol className="hero-steps" aria-hidden>
           {HERO_WORDS.map((w, i) => (
