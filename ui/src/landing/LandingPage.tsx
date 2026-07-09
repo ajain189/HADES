@@ -487,7 +487,7 @@ function Technology() {
               p: "Link loss, dropped frames, mid stream resolution changes, a throttled fanless laptop. The pipeline is built against all of them, and the field target is a stock MacBook Air with the network off.",
             },
           ].map((row, i) => (
-            <li key={row.t} className="tech-row" data-reveal={i % 2 ? "right" : "left"}>
+            <li key={row.t} className="tech-row" data-reveal="up">
               <span className="tech-num">{String(i + 1).padStart(2, "0")}</span>
               <h3>{row.t}</h3>
               <p>{row.p}</p>
@@ -512,8 +512,8 @@ function Technology() {
             { part: "ELRS receiver", role: "The control link. Long range, low latency, and a second telemetry path over serial." },
             { part: "2306 motors with 5 inch tri-blades", role: "Four of each. Sized for wind that follows a storm, not for racing." },
             { part: "6S battery", role: "The flight window. Every design choice upstream is measured against the minutes it buys." },
-          ].map((c, i) => (
-            <li key={c.part} className="craft-row" data-reveal={i % 2 ? "right" : "left"}>
+          ].map((c) => (
+            <li key={c.part} className="craft-row" data-reveal="up">
               <strong>{c.part}</strong>
               <span>{c.role}</span>
             </li>

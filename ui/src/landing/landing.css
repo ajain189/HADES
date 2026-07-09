@@ -700,28 +700,40 @@
   list-style: none;
   border-top: 1px solid var(--line);
 }
+/* editorial spec-sheet row: index + title on the left, description on the right — uses the FULL
+ * width instead of cramming everything into the left half */
 .tech-row {
   display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 6px 24px;
-  padding: 30px 0 34px;
+  grid-template-columns: 56px minmax(220px, 1fr) 1.5fr;
+  gap: clamp(24px, 4vw, 64px);
+  align-items: start;
+  padding: clamp(30px, 4vh, 44px) 0;
   border-bottom: 1px solid var(--line);
 }
 .tech-num {
-  grid-row: span 2;
   font-size: 14px;
   font-weight: 560;
-  color: var(--ink-faint);
+  color: var(--teal);
   font-variant-numeric: tabular-nums;
-  padding-top: 5px;
+  padding-top: 6px;
 }
 .tech-row h3 {
-  font-size: 23px;
+  font-size: clamp(20px, 1.6vw, 26px);
+  line-height: 1.2;
 }
 .tech-row p {
   color: var(--ink-soft);
   font-size: 16px;
-  max-width: 66ch;
+  line-height: 1.65;
+}
+@media (max-width: 760px) {
+  .tech-row {
+    grid-template-columns: 40px 1fr;
+    gap: 8px 20px;
+  }
+  .tech-row p {
+    grid-column: 1 / -1;
+  }
 }
 
 /* aircraft component rows */
