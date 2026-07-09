@@ -576,9 +576,9 @@ function Faq() {
    wanted. */
 const TEAM = [
   { name: "Aarush Jain", img: "aarush.png" },
-  { name: "Ryan", img: "ryan.png" },
-  { name: "Soham", img: "soham.png" },
-  { name: "Andy", img: "andy.png" },
+  { name: "Ryan Cannon", img: "ryan.png" },
+  { name: "Soham Gaonkar", img: "soham.png" },
+  { name: "Andy Lin", img: "andy.png" },
 ];
 function Team() {
   return (
