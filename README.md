@@ -1,30 +1,58 @@
 <div align="center">
 
-<img src="HADES_logo.png" alt="HADES" width="380" />
+<img src="hades-logo.png" alt="HADES" width="200" />
 
 ### Hurricane Autonomous Detection and Emergency System
 
-**A ground-control station for post-hurricane drone search-and-rescue.**
+**A ground station for post-hurricane drone search-and-rescue.**
 
-Ingest a live FPV-drone video feed, run real-time human detection on the frames, compute
-real-world survivor coordinates with honest uncertainty, and present detections plus a live
-survivor map in a coordinator UI that runs on a 16 GB MacBook Air in the field.
+An FPV drone flies the search area and streams video to a laptop on the ground. HADES is the
+ground station that receives that feed: it runs real-time human detection on the frames, turns
+each detection into a real-world survivor coordinate with an honest uncertainty radius, and
+presents the contacts on a live map in a coordinator interface. The whole loop runs on one
+fanless MacBook Air with the network off.
 
 <br/>
 
 ![on-device](https://img.shields.io/badge/runs-100%25_on--device-2FB67C?style=for-the-badge)
 ![platform](https://img.shields.io/badge/Apple_Silicon-Core_ML_+_ANE-3B7BC8?style=for-the-badge&logo=apple&logoColor=white)
-![latency](https://img.shields.io/badge/glass--to--glass-22.4_ms_p95_(dev_floor)-E6A23C?style=for-the-badge)
+![latency](https://img.shields.io/badge/glass--to--glass-22.4_ms_p95-E6A23C?style=for-the-badge)
 
 </div>
 
 ---
 
-## What it does
+## How it connects
 
-HADES is a desktop app that supervises a Python detection service. Video displays at full frame
-rate while detection, tracking, and localization run decoupled, so a survivor pin never costs
-you a dropped frame. One contact flows through seven stages, each with a single responsibility:
+HADES is the ground half of a two-part system: an aircraft in the air and a laptop on the
+ground. The signal chain, drone to survivor pin, is:
+
+```
+   DRONE (in the air)                          GROUND STATION (one laptop)
+ ┌─────────────────────┐                     ┌──────────────────────────────────────────┐
+ │  DJI O4 camera  ─────┼── digital video ───┼─► HDMI/UVC capture ─► Python service      │
+ │  (fixed mount)       │     (analog-free)   │       │                 detect → track    │
+ │                      │                     │       │                 → project → fuse  │
+ │  F405 FC + M10 GPS ──┼── CRSF telemetry ──┼─► ELRS USB serial ──────┘        │        │
+ │  ELRS radio          │   (pose: lat/lon/   │                                  ▼        │
+ └─────────────────────┘    alt/attitude)     │    two localhost WebSockets ─► Electron   │
+                                              │    (frames + detections)      coordinator │
+                                              │                                UI (map)   │
+                                              └──────────────────────────────────────────┘
+```
+
+Two links come off the aircraft, on **separate radios**: the **DJI O4** flies the camera view
+down as a digital video feed (captured into the laptop over HDMI-to-USB UVC), and the **ELRS**
+radio carries low-rate **CRSF telemetry** (the aircraft's GPS position, altitude, and attitude)
+in over USB serial. On the laptop, a **Python detection service** runs the vision-and-math
+pipeline and a **coordinator UI** (an Electron app) draws the results. The service and the UI
+talk over two localhost WebSocket channels, aligned frame-by-frame. Nothing leaves the machine.
+
+## The pipeline
+
+Video displays at full frame rate while detection, tracking, and localization run decoupled, so
+a survivor pin never costs you a dropped frame. One contact flows through seven stages, each with
+a single responsibility and no reach across the boundary:
 
 <div align="center">
 
@@ -32,29 +60,39 @@ you a dropped frame. One contact flows through seven stages, each with a single 
 
 </div>
 
-- **Detection** reads a frame and returns person boxes. YOLO11s fine-tuned on HERIDAL + SARD for
-  tiny aerial people, exported to Core ML (FP16) and served on the Apple Neural Engine.
-- **Tracker** gives detections persistent IDs and bridges the 10 fps detector to the 30 fps
-  video (ByteTrack).
-- **Projector** turns each detection into a ray and intersects it with the ground.
-- **Confirmation** promotes a track by persistence, confidence, and world-space clustering. It
-  sets display priority, never visibility.
-- **Fuse + Quantify** averages a contact across frames and runs a Monte Carlo to produce an
-  honest uncertainty ellipse and an actionability class (PINPOINT, SWEEP, AREA, or CUE-ONLY).
-  It never emits a false-precision pin.
+- **FrameSource** yields `(frame, timestamp, seq)` with drop-to-latest, and tolerates dropped
+  frames, mid-stream resolution changes, and link loss. Implementations are swappable: recorded
+  file, live UVC capture, or synthetic.
+- **Detector** is a stateless `frame → Detection[]` (box, `person`, confidence). YOLO11s
+  fine-tuned on HERIDAL + SARD for tiny aerial people, exported to Core ML (FP16) and served on
+  the Apple Neural Engine. It knows nothing about time or the world.
+- **Tracker** gives detections persistent IDs and bridges the 10 fps detector to 30 fps video: a
+  from-scratch NumPy **ByteTrack** with a Kalman filter, two-stage association, and no ID
+  resurrection.
+- **Projector** turns each detection's box bottom-center into a ray and intersects it with the
+  ground (a cheap per-detection point, no Monte Carlo).
+- **Confirmation** promotes a track's display priority by a decay score, hysteresis, and
+  world-space clustering. It sets **display priority, never visibility**, so a real detection is
+  never hidden.
+- **Fuse + Quantify** (the localizer) fuses a confirmed contact across frames and runs a Monte
+  Carlo to produce an honest uncertainty ellipse and an actionability class (PINPOINT, SWEEP,
+  AREA, or CUE-ONLY). It never emits a false-precision pin.
 - **Coordinator UI** shows one contact in three projections (map, video, list) over a global
-  selection model, with MGRS and WGS84 readouts, a degrade-visibly status spine, and an
-  append-only mission log. Runs fully offline.
+  selection model, with MGRS and WGS84 readouts, a status spine that degrades visibly under load,
+  and an append-only mission log. Runs fully offline.
 
-Two localhost WebSocket channels carry the data: one binary (JPEG frames), one JSON (detections
-and telemetry), aligned by `frame_id` so every overlay lands on the frame it belongs to.
+**The IPC.** Two localhost WebSocket channels carry the data. A **binary channel** streams
+JPEG-encoded frames, and a **JSON channel** (bidirectional) carries per-frame detections and
+contact records, plus operator commands back to the service (for example, promote a track to a
+full localization on demand). The JPEG, the detection message, and every contact for a frame all
+carry the **same `frame_id`**, so every overlay lands on the frame it belongs to. Electron
+supervises the Python service as a child process and shuts it down when the app closes.
 
 ## Live demo
 
-A static, click-to-run demo replays a canned mission through the real coordinator UI in a plain
-browser. No install, no backend.
-
-> **Demo link:** _to be published_ (see [Publishing the demo](#publishing-the-demo)).
+The project site (linked at the top of this repo) includes a static, click-to-run demo that
+replays a canned mission through the real coordinator UI in a plain browser. No install, no
+backend.
 
 <div align="center">
 
@@ -66,6 +104,80 @@ The demo is labeled **DEMO MODE**: the scene and drone pose are scripted, but ev
 uncertainty ellipse, and confidence value is live output of the HADES localizer run against
 known ground truth. The banner reports the localizer's median error against that known truth
 (1.1 m on this scripted scene). It is not a live feed.
+
+---
+
+## How the math works
+
+Turning a person-shaped patch of pixels into a coordinate on a map is the heart of the system.
+It happens in two steps: a geometric projection that gives a single best-guess coordinate, and a
+Monte Carlo that turns the sensors' error into an honest uncertainty radius.
+
+### From pixel to coordinate: monocular ray-to-ground
+
+There is one camera and no depth sensor, so a single detection is not a point in space; it is a
+**ray**. HADES casts that ray from the camera, through the aircraft's known pose, and intersects
+it with the ground. The model is flat-earth v1 in a local **ENU** (East-North-Up) tangent plane
+centered under the drone, on WGS84.
+
+Given a pixel `(u, v)` at the person's feet (the box bottom-center), the camera intrinsics
+`K = [[fx,0,cx],[0,fy,cy],[0,0,1]]`, the aircraft attitude `(roll, pitch, yaw)`, the fixed
+camera boresight, the drone altitude, and the ground elevation:
+
+```
+ray_cam = K⁻¹ · [u, v, 1]ᵀ                 # direction in the camera's optical frame
+d       = R_world_body · R_body_cam · ray_cam   # rotate that ray into ENU world coordinates
+require d_up < 0                            # the ray must point at the ground, or reject
+H       = drone_alt − ground_elev           # height above ground (AGL)
+t       = −H / d_up                         # scale the ray down to the ground plane
+east    = t · d_east ,  north = t · d_north
+lat     = drone_lat + north / 111320
+lon     = drone_lon + east  / (111320 · cos(lat))
+```
+
+`R_world_body` is the aircraft's attitude (an aerospace ZYX Euler rotation), and `R_body_cam` is
+the fixed mount of the gimbal-less O4 camera; the effective camera pitch is the mount angle plus
+the airframe's pitch. The projection **refuses to invent a pin**: if there is no GPS fix, any
+attitude value is missing, the vertical datums do not match (a coastal geoid offset of 25 to 35 m
+would otherwise poison the height), or the ray points at or above the horizon, it raises rather
+than returning a confident, wrong coordinate.
+
+### From one coordinate to an honest radius: the Monte Carlo
+
+The projection above is exact given perfect inputs, but the inputs are not perfect. A single
+degree of heading error moves the ground point by about **1.75 m per 100 m of range**, and an FPV
+quad has no magnetometer, so heading (from GPS course and a drifting gyro) is the dominant error
+source. HADES quantifies this by sampling.
+
+For each confirmed contact it draws **N = 1000** realizations. Each draw perturbs every input by
+its calibrated sensor error (GPS horizontal and vertical, roll/pitch/yaw jitter, pixel jitter,
+ground-elevation, time-sync) and re-projects through the same `ray_to_ground`. The key subtlety:
+the **heading bias is drawn once per contact and shared across all its frames**, not redrawn per
+frame. A per-frame bias would average out across a multi-frame fusion and fake a precision the
+geometry cannot deliver; because the bias is common-mode, it does **not** average away, so the
+reported radius asymptotes to a floor that grows with range instead of shrinking to zero.
+
+Multi-frame contacts are fused first with an information-weighted (inverse-covariance) mean of
+the per-frame ground points, then the Monte Carlo is run over that fusion. The outputs are a 2×2
+ENU covariance, a 95% confidence ellipse (semi-axes scaled by `√χ²₂,₀.₉₅ ≈ 2.45`), and, as the
+headline number, **R95: the empirical 95th-percentile radius** of the sample cloud about the
+estimate. A NEES diagnostic (target ≈ 2) checks that the reported spread matches the actual
+error, and a residual test flags a target that is moving rather than stationary.
+
+Each contact then lands in one of four **actionability classes** by its R95, so an operator reads
+intent, not just a number:
+
+| Class | R95 | Meaning |
+| --- | --- | --- |
+| **PINPOINT** | ≤ 5 m | walk straight to it |
+| **SWEEP** | ≤ 25 m | a short line search |
+| **AREA** | ≤ 100 m | search the neighborhood |
+| **CUE-ONLY** | > 100 m | a direction, not a location |
+
+A single straight pass with little aspect diversity is capped at SWEEP no matter how tight the
+math looks, because only viewing a survivor from different angles actually breaks the
+heading limit. The problem is heading-limited, not algorithm-limited, and the system is built to
+say so out loud.
 
 ---
 
@@ -108,10 +220,15 @@ frame. Boxes are live model output.</sub>
 | 0.10 | 0.63 | 0.46 |
 | 0.05 (recall-first) | 0.69 | 0.37 |
 
-Shipped FP16 Core ML model at the default operating point: **recall 0.551, precision 0.676**
-(793 true positives, 380 false positives, 645 misses). Selection optimism is disclosed: the 960
-input resolution was chosen on the same held-out set, so treat 0.551 as an estimate pending the
-curated disaster footage.
+Recall is operating-point-driven. At a fielded, recall-first threshold the shipped FP16 Core ML
+model reaches **~0.69 recall** on single frames (higher again after multi-frame confirmation),
+while the strict 0.25 default point gives **recall 0.551, precision 0.676** (793 true positives,
+380 false positives, 645 misses). Both are honest: 0.551 is the conservative anchor, ~0.69 is the
+realistic fielded number. This sits below the 0.80 recall floor that was pre-registered against a
+looser IoU-mAP scale; the acceptance test here is a stricter center-distance match on native
+4000 px frames, and it is reported faithfully rather than reframed. Selection optimism is
+disclosed too: the 960 input resolution was chosen on the same held-out set, so these move when
+the curated disaster footage lands.
 
 ### Localization
 
@@ -143,8 +260,8 @@ AREA-class with a large radius (R95 about 84 m) and never reports PINPOINT.
 
 The latency budget is in-app glass-to-glass (frame on socket to painted with overlay and pin)
 at 120 ms. Video runs at 30 fps; detection runs decoupled at 10 fps or better. All three
-candidate resolutions clear the detection gate on a fanless MacBook Air M4, and the ANE serves
-the model (a 5.6x speedup over CPU at 640 px confirms it is not falling back).
+candidate resolutions clear the detection gate on a fanless MacBook Air M4 (32 GB), and the ANE
+serves the model (a 5.6x speedup over CPU at 640 px confirms it is not falling back).
 
 <table>
 <tr>
@@ -201,6 +318,30 @@ Versions are read from the lockfiles, not guessed (`service/uv.lock`,
 
 ---
 
+## The aircraft
+
+The ground station is only half the system; the other half flies. The drone is built, not
+bought: a 3D-printed airframe carrying an off-the-shelf FPV and telemetry stack.
+
+| Part | Role |
+| --- | --- |
+| **3D-printed airframe** | A monocoque printed in-house that carries the whole stack. |
+| **Speedy Bee F405 flight controller** | Keeps the aircraft level and streams attitude and GPS telemetry, which the localizer turns into coordinates. |
+| **DJI O4 Air Unit Lite + camera** | The digital video link. Fixed mount, no gimbal; flies the survivor's-eye view down to the laptop. |
+| **ELRS Nano RX** | The control link, plus a second telemetry path (CRSF) over USB serial. |
+| **HGLRC M10 GPS** | Position and altitude for every frame's pose. |
+| **2306 motors, 5-inch tri-blades** | Four of each. Sized for post-storm wind, not for racing. |
+| **6S battery** | Sets the flight time; every choice upstream is weighed against the air time it costs. |
+
+**How pose reaches the math.** Telemetry is time-synced to video by timestamp, so every frame is
+paired with the aircraft pose interpolated at that instant. Two `TelemetrySource` adapters feed
+it: `SrtFileSource` replays the O4's `.srt` sidecar against recorded video (the validation path),
+and `CrsfSerialSource` reads live CRSF off the ELRS radio's USB serial port (stubbed in v1, built
+with the hardware in hand). Pose that lacks attitude is left honestly incomplete, and the
+geometry refuses rather than assuming the aircraft is level and pointing north.
+
+---
+
 ## Run it locally
 
 Targets an Apple Silicon MacBook (M4 or M5), macOS. No CUDA: inference is Core ML.
@@ -219,22 +360,9 @@ Tests: `uv run pytest` (service) and `pnpm test` (UI, Playwright over a mock WS)
 
 Hard constraints the build holds to: the detect, localize, and display loop runs with the
 network off (no cloud inference, no runtime model or tile fetch, no telemetry phone-home); it
-stays functional on a 16 GB MacBook Air M4 by degrading processed-detection FPS, never the
+stays functional on a fanless MacBook Air M4 by degrading processed-detection FPS, never the
 video. Allowed exceptions are pre-downloaded offline map tiles and an optional, user-triggered
 post-mission export.
-
-## Publishing the demo
-
-The static demo build and a GitHub Pages workflow are ready; publishing is one step.
-
-1. Build the static bundle: `cd ui && pnpm build:web` (outputs `ui/dist-web/`, no Electron).
-2. In the repo, **Settings -> Pages -> Build and deployment -> Source: "GitHub Actions."**
-3. Push to `main`, or run the **Deploy demo site** workflow from the Actions tab. It deploys to
-   `https://<user>.github.io/<repo>/`.
-4. Replace the _to be published_ demo link above with that URL.
-
-The build uses a relative asset base, so the same bundle also works at a Netlify or Vercel root,
-or opened from `file://`, with no configuration change.
 
 ## Documentation
 
@@ -243,4 +371,3 @@ or opened from `file://`, with no configuration change.
   (`figures/`), the Wolfram hero-visual scripts (`wolfram/`), and the content gate that maps
   each figure to its source artifact (`OUTLINE.md`).
 - `docs/plans/`: the phase-by-phase build plan and the per-phase result writeups.
-</content>
