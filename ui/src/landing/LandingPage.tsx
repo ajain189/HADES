@@ -206,7 +206,8 @@ function Statement() {
 /* ---- recognition ---- */
 const LOGOS = [
   { src: "logos/duke-pratt.svg", alt: "Duke Pratt School of Engineering", h: 46 },
-  { src: "logos/mit-csail.svg", alt: "MIT CSAIL", h: 62 },
+  { src: "logos/mit-solve.png", alt: "MIT Solve", h: 34 },
+  { src: "logos/day-of-ai.png", alt: "Day of AI", h: 58 },
   { src: "logos/ncsef.png", alt: "North Carolina Science and Engineering Fair", h: 58 },
   { src: "logos/samsung-sft.png", alt: "Samsung Solve for Tomorrow", h: 68 },
 ];
@@ -629,7 +630,8 @@ function Team() {
             { logo: "logos/samsung-sft.png", name: "Samsung Solve for Tomorrow", note: "national program, community problem engineering" },
             { logo: "logos/ncsef.png", name: "NC Science and Engineering Fair", note: "state level competition" },
             { logo: "logos/duke-pratt.svg", name: "Duke Pratt School of Engineering", note: "mentorship and review" },
-            { logo: "logos/mit-csail.svg", name: "MIT CSAIL", note: "research guidance" },
+            { logo: "logos/mit-solve.png", name: "MIT Solve", note: "global challenge community" },
+            { logo: "logos/day-of-ai.png", name: "Day of AI", note: "AI education program" },
           ].map((h) => (
             <li key={h.name} className="honor-row" data-reveal>
               <img src={A(h.logo)} alt="" />

@@ -54,7 +54,8 @@ test("home renders the hero, partner logos, real metrics, and no demo links", as
   await page.waitForTimeout(800);
   for (const alt of [
     "Duke Pratt School of Engineering",
-    "MIT CSAIL",
+    "MIT Solve",
+    "Day of AI",
     "North Carolina Science and Engineering Fair",
     "Samsung Solve for Tomorrow",
   ]) {
