@@ -39,13 +39,18 @@ export function useSmoothScroll() {
  *   data-reveal="right"  -> from the right
  *   data-reveal="zoom"   -> subtle scale-up settle (large imagery)
  */
+/* Cubo's reveal grammar (from teardown): small directional pre-offset, no blur, then settle on
+ * a soft ease-out. y40 / x±40 / scale0.9, opacity 0->1, ~0.8s, ease [0.28,0.41,0.56,1]. Calmer
+ * and lighter than a big blurred drift; reads as "pieces sliding cohesively into place". */
+const CUBO_EASE = "power2.out"; // ~cubic-bezier(0.28,0.41,0.56,1)
+const REVEAL_DUR = 0.8;
 const FROM: Record<string, gsap.TweenVars> = {
-  up: { autoAlpha: 0, y: 90, filter: "blur(6px)" },
-  left: { autoAlpha: 0, x: -120, filter: "blur(6px)" },
-  right: { autoAlpha: 0, x: 120, filter: "blur(6px)" },
-  zoom: { autoAlpha: 0, y: 60, scale: 1.08, filter: "blur(4px)" },
+  up: { autoAlpha: 0, y: 40 },
+  left: { autoAlpha: 0, x: -40 },
+  right: { autoAlpha: 0, x: 40 },
+  zoom: { autoAlpha: 0, y: 24, scale: 0.94 },
 };
-const TO: gsap.TweenVars = { autoAlpha: 1, x: 0, y: 0, scale: 1, filter: "blur(0px)" };
+const TO: gsap.TweenVars = { autoAlpha: 1, x: 0, y: 0, scale: 1 };
 
 export function useReveals(deps: unknown[] = []) {
   useEffect(() => {
@@ -96,23 +101,23 @@ export function useReveals(deps: unknown[] = []) {
       if (aboveFold) {
         return gsap.fromTo(el, FROM[dir] ?? FROM.up, {
           ...TO,
-          duration: 1.1,
-          ease: "power3.out",
-          delay: 0.2 + idx * 0.09,
+          duration: REVEAL_DUR + 0.2,
+          ease: CUBO_EASE,
+          delay: 0.2 + idx * 0.08,
         });
       }
       // TRIGGER-ONCE with a real time-based duration (NOT scrub): when the element enters view
-      // it plays a full ~0.9s fade+rise regardless of scroll speed. Scrubbed reveals completed
-      // in a fraction of a second under fast/smooth scrolling, so they read as "just there".
-      // The per-sibling stagger makes grouped rows cascade.
+      // it plays a full fade+drift regardless of scroll speed. Fires once (the Cubo behavior —
+      // cohesion comes from continuous parallax, not from re-firing reveals). Per-sibling stagger
+      // makes grouped rows cascade in.
       return gsap.fromTo(
         el,
         FROM[dir] ?? FROM.up,
         {
           ...TO,
-          duration: 0.95,
-          ease: "power3.out",
-          delay: idx * 0.1,
+          duration: REVEAL_DUR,
+          ease: CUBO_EASE,
+          delay: idx * 0.09,
           scrollTrigger: {
             trigger: el,
             start: "top 86%",
@@ -152,6 +157,35 @@ export function useParallax(deps: unknown[] = []) {
         },
       );
     });
+    return () => {
+      tweens.forEach((t) => {
+        t.scrollTrigger?.kill();
+        t.kill();
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
+/* Cohesion detail (Cubo): a panel that starts slightly small and grows to full size as it enters
+ * the viewport, scrubbed to scroll so it tracks BOTH directions (grows on the way down, shrinks
+ * on the way up). Any [data-grow] element scales from 0.92 -> 1 across its entrance. */
+export function usePanelGrow(deps: unknown[] = []) {
+  useEffect(() => {
+    if (REDUCED) return;
+    const els = gsap.utils.toArray<HTMLElement>("[data-grow]");
+    const tweens = els.map((el) =>
+      gsap.fromTo(
+        el,
+        { scale: 0.92 },
+        {
+          scale: 1,
+          ease: "none",
+          transformOrigin: "center bottom",
+          scrollTrigger: { trigger: el, start: "top bottom", end: "top center", scrub: 0.5 },
+        },
+      ),
+    );
     return () => {
       tweens.forEach((t) => {
         t.scrollTrigger?.kill();

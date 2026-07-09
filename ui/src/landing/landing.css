@@ -130,13 +130,21 @@
   font-size: 15px;
   font-weight: 560;
   text-decoration: none;
-  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.3s ease,
+    background 0.3s ease;
 }
 .landing .pill:hover {
   transform: translateY(-2px);
 }
 .landing .pill:active {
   transform: translateY(0) scale(0.98);
+}
+/* the arrow slides forward on hover (the Cubo button tell) */
+.landing .pill svg {
+  transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.landing .pill:hover svg {
+  transform: translateX(4px);
 }
 .pill-light {
   background: var(--paper);
@@ -440,88 +448,112 @@
   background: var(--teal);
 }
 
-/* ---------------- pipeline rail (Cubo grammar: gray cards on white) ---------------- */
+/* ---------------- pipeline flow diagram (frame -> found) ---------------- */
 .rail-section {
-  padding: clamp(88px, 12vh, 160px) 0 clamp(88px, 12vh, 160px) clamp(20px, 4vw, 56px);
+  padding: clamp(88px, 12vh, 160px) clamp(20px, 4vw, 56px);
   background: var(--paper);
-  overflow: hidden;
 }
 .rail-head {
+  max-width: 760px;
+  margin-bottom: clamp(40px, 6vh, 72px);
+}
+/* the diagram: four stage nodes in a connected row, sitting on the dark "offline" foundation */
+.flow {
   max-width: 1280px;
-  padding-right: clamp(20px, 4vw, 56px);
-}
-/* DEFAULT (no horizontal scrub): a wrapping grid so ALL FIVE cards — including 05 — are always
- * on screen with no horizontal scroll. This is the fail-safe state: it renders whenever the JS
- * drift is not active (reduced motion, narrow viewport, or any misfire). The `.rail-section`'s
- * right padding is restored here so the wrapped grid isn't flush to the edge. */
-.rail-track {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
-  gap: 18px;
-  padding-right: clamp(20px, 4vw, 56px);
-  will-change: transform;
-}
-/* ACTIVE horizontal scrub (JS-confirmed, desktop, motion allowed): the signature single-row rail
- * that drifts sideways on scroll. Fixed-width cards in a nowrap flex row; the JS translates it. */
-.rail-track.is-scrubbing {
-  display: flex;
-  grid-template-columns: none;
-  padding-right: 0;
-}
-/* Cubo card anatomy: number pinned top, text block pinned bottom, the air between is
- * structure rather than leftover */
-/* Cubo card rhythm: a small index at the top, then a fixed gap, then title + body as one
- * tight block. Equal min-height keeps the row aligned; the block sits at the TOP so short and
- * long cards read as one intentional grid rather than bottom-ragged. */
-.rail-card {
-  display: flex;
-  flex-direction: column;
-  min-height: 340px;
+  margin-inline: auto;
+  border-radius: 24px;
   background: var(--paper-alt);
-  border-radius: 16px;
-  padding: 34px 34px 36px;
+  padding: clamp(24px, 3vw, 40px);
 }
-/* in the drifting single-row rail the cards are a fixed width and never shrink; in the wrapped
- * grid fallback they fill their grid cell (auto width) so the row packs cleanly. */
-.rail-track.is-scrubbing .rail-card {
-  flex: none;
-  width: min(400px, 82vw);
+.flow-track {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
 }
-.rail-card-dark {
+.flow-node {
+  position: relative;
+  padding: 22px clamp(18px, 1.8vw, 30px) 26px;
+}
+/* a hairline between adjacent nodes reads as one connected pipeline, not four cards */
+.flow-node + .flow-node {
+  border-left: 1px solid var(--line);
+}
+.flow-num {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--teal);
+  font-variant-numeric: tabular-nums;
+}
+.flow-title {
+  margin-top: 12px;
+  font-size: clamp(19px, 1.5vw, 24px);
+}
+.flow-body {
+  margin-top: 10px;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+/* the connector arrow: sits in the gutter between nodes, on the node's center line */
+.flow-arrow {
+  position: absolute;
+  top: 30px;
+  right: -10px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--teal);
+  box-shadow: var(--ring);
+}
+/* the foundation: the dark bar the whole loop rests on */
+.flow-base {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: clamp(16px, 2vw, 32px);
   background: var(--black);
   color: #fff;
+  border-radius: 16px;
+  padding: 22px clamp(24px, 3vw, 36px);
 }
-.rail-card-dark .rail-body {
-  color: rgba(255, 255, 255, 0.72);
-}
-.rail-card-dark .rail-num {
+.flow-base-label {
+  font-family: "Urbanist Variable", "Urbanist", sans-serif;
+  font-size: clamp(18px, 1.5vw, 22px);
+  font-weight: 700;
   color: var(--teal);
+  white-space: nowrap;
 }
-.rail-num {
-  font-size: 13px;
-  font-weight: 560;
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-  /* fixed space below the index so every card's title starts on the same line */
-  margin-bottom: 56px;
-}
-.rail-title {
-  font-size: 26px;
-}
-.rail-body {
-  margin-top: 14px;
-  color: var(--ink-soft);
-  font-size: 15.5px;
+.flow-base-body {
+  font-size: 14.5px;
   line-height: 1.55;
+  color: rgba(255, 255, 255, 0.74);
 }
 @media (max-width: 899px) {
-  .rail-section {
-    padding-right: clamp(20px, 4vw, 56px);
-  }
-  /* narrow viewports never scrub — one full-width card per row */
-  .rail-track {
+  .flow-track {
     grid-template-columns: 1fr;
+  }
+  .flow-node + .flow-node {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+  /* arrows point DOWN the vertical stack on narrow screens */
+  .flow-arrow {
+    top: auto;
+    bottom: -10px;
+    right: auto;
+    left: 30px;
+    transform: rotate(90deg);
+  }
+  .flow-base {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 
@@ -855,6 +887,9 @@
   border-radius: 24px;
   padding: clamp(64px, 9vh, 110px) clamp(24px, 4vw, 64px) 0;
   overflow: hidden;
+  /* grows 0.92 -> 1 on scroll-in (usePanelGrow); origin at the bottom so it "rises" into place */
+  transform-origin: center bottom;
+  will-change: transform;
 }
 .footer-grid {
   display: grid;

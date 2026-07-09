@@ -2,7 +2,7 @@ import { ArrowRight, ArrowUpRight, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { BeforeAfter } from "./BeforeAfter";
-import { gsap, REDUCED, ScrollTrigger, useParallax, useReveals, useSmoothScroll } from "./motion";
+import { gsap, REDUCED, ScrollTrigger, usePanelGrow, useParallax, useReveals, useSmoothScroll } from "./motion";
 
 /* HADES demonstration site v3. One family (Archivo), one accent (the logo teal), warm
  * tinted neutrals, and a static floating-drone hero (Cubo grammar: the product sits centered
@@ -33,6 +33,7 @@ export function LandingPage() {
   }, []);
   useReveals([route]);
   useParallax([route]);
+  usePanelGrow([route]);
 
   return (
     <div className="landing">
@@ -248,85 +249,63 @@ function SeeSection() {
   );
 }
 
-/* ---- pipeline: pin-free horizontal drift ---- */
+/* ---- pipeline: a connected flow DIAGRAM (frame -> found). Four stages linked by arrows read as
+   one system, sitting on the "Offline, by design" foundation that carries the whole loop. ---- */
 const STEPS = [
   {
     n: "01",
     title: "Detect",
-    body: "A YOLO11 model fine tuned on aerial search imagery finds people in every frame, running on the laptop's neural engine at ten frames a second while video plays at thirty.",
+    body: "A YOLO11 model fine tuned on aerial search imagery finds people in every frame, on the laptop's neural engine.",
   },
   {
     n: "02",
     title: "Localize",
-    body: "Each detection becomes a ray from the camera through the aircraft's pose, intersected with the ground: a real coordinate with an honest uncertainty radius, never a false precision pin.",
+    body: "Each detection becomes a ray through the aircraft's pose, intersected with the ground: a real coordinate with an honest radius.",
   },
   {
     n: "03",
     title: "Confirm",
-    body: "Tracks persist across frames and cluster in world space. Confidence builds and contacts get promoted. Visibility is never gated, only priority.",
+    body: "Tracks persist across frames and cluster in world space. Confidence builds and contacts get promoted.",
   },
   {
     n: "04",
     title: "Coordinate",
-    body: "One contact, three views: map, video, list, over a single selection. The operator never loses a survivor between views, and every event lands in the mission log.",
+    body: "One contact, three views: map, video, list, over a single selection. Every event lands in the mission log.",
   },
 ];
 function PipelineRail() {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const section = sectionRef.current;
-    const track = trackRef.current;
-    if (!section || !track || REDUCED || window.innerWidth < 900) return;
-    // Mark the track as actively scrubbing ONLY when the horizontal drift really runs. The CSS
-    // uses this class to keep the fixed-width horizontal row; without it (reduced motion, narrow
-    // viewport, or any misfire) the track wraps so all five cards — including 05 — stay reachable
-    // with no horizontal scroll. This is the fail-safe that keeps card 05 from falling off-screen.
-    track.classList.add("is-scrubbing");
-    const overflow = () => Math.max(0, track.scrollWidth - section.clientWidth + 96);
-    const tween = gsap.fromTo(
-      track,
-      { x: () => overflow() * 0.18 },
-      {
-        x: () => -overflow(),
-        ease: "none",
-        scrollTrigger: {
-          trigger: section,
-          start: "top 85%",
-          end: "bottom 15%",
-          scrub: 0.5,
-          invalidateOnRefresh: true,
-        },
-      },
-    );
-    return () => {
-      track.classList.remove("is-scrubbing");
-      tween.scrollTrigger?.kill();
-      tween.kill();
-    };
-  }, []);
   return (
-    <section className="rail-section" ref={sectionRef}>
+    <section className="rail-section">
       <div className="section-head rail-head" data-reveal="left">
         <h2 className="section-title">Frame to found.</h2>
+        <p className="section-lede">
+          One loop turns a live frame into a located survivor. Each stage feeds the next, and the
+          whole pipeline runs offline on a single laptop.
+        </p>
       </div>
-      <div className="rail-track" ref={trackRef}>
-        {STEPS.map((s) => (
-          <article key={s.n} className="rail-card">
-            <span className="rail-num">{s.n}</span>
-            <h3 className="rail-title">{s.title}</h3>
-            <p className="rail-body">{s.body}</p>
-          </article>
-        ))}
-        <article className="rail-card rail-card-dark">
-          <span className="rail-num">05</span>
-          <h3 className="rail-title">Offline, by design</h3>
-          <p className="rail-body">
+      <div className="flow" data-reveal="up">
+        <ol className="flow-track">
+          {STEPS.map((s, i) => (
+            <li key={s.n} className="flow-node" style={{ "--fi": String(i) } as React.CSSProperties}>
+              <span className="flow-num">{s.n}</span>
+              <h3 className="flow-title">{s.title}</h3>
+              <p className="flow-body">{s.body}</p>
+              {i < STEPS.length - 1 && (
+                <span className="flow-arrow" aria-hidden>
+                  <ArrowRight size={18} />
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        <div className="flow-base">
+          <span className="flow-base-label">Offline, by design</span>
+          <p className="flow-base-body">
             The whole loop runs with the network off. Map tiles are cached before the mission,
-            inference stays on the laptop, nothing phones home. Built for the hour after the
-            storm, when nothing else works.
+            inference stays on the laptop, nothing phones home. Built for the hour after the storm,
+            when nothing else works.
           </p>
-        </article>
+        </div>
       </div>
     </section>
   );
@@ -665,7 +644,7 @@ function Team() {
 function Footer() {
   return (
     <footer className="site-footer">
-      <div className="footer-panel">
+      <div className="footer-panel" data-grow>
         <div className="footer-grid">
           <div data-reveal="left">
             <h2 className="footer-title">Find them faster.</h2>
