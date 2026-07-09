@@ -991,24 +991,19 @@
 
 /* ---------------- reduced motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
-  /* reveals under reduced motion do an OPACITY-ONLY fade (driven by GSAP in useReveals), so we
-   * do NOT force them visible here — that would fight the fade. We only strip any positional
-   * transform/filter so the reveal is purely an opacity change, never a slide or blur. */
-  .landing [data-reveal] {
-    transform: none !important;
-    filter: none !important;
-  }
-  /* the hero's load entrances (wordmark / drone float-in / desc / steps) are decorative motion —
-     under reduced motion they simply appear, no rise or float. The scroll parallax is already
-     gated off in JS (if REDUCED). */
+  /* Only AUTOPLAY / looping motion is suppressed under reduced motion. The scroll-driven system
+   * (reveals, parallax, hero drift, panel grow, count-ups, the statement word-brighten) is
+   * user-initiated and runs regardless — it IS the site's experience, and gating it left the page
+   * dead for reduce-motion users. So here we ONLY: kill the CSS load-entrance keyframes (hero
+   * wordmark/drone/desc/steps rise+float on load) so those simply appear, stop the looping
+   * step-word weight sweep, and remove hover transforms. NOTE: we deliberately do NOT touch
+   * [data-reveal] or .statement-text — those are GSAP-driven and must keep their motion. */
   .hero-word,
   .hero-drone,
   .hero-desc,
   .hero-steps,
   .site-nav {
     animation: none;
-    opacity: 1;
-    transform: none;
   }
   .hero-steps li {
     animation: none;
@@ -1017,13 +1012,11 @@
   }
   .landing .pill:hover,
   .honor-row:hover .honor-arrow,
-  .logo-strip-row img:hover {
+  .logo-strip-row img:hover,
+  .team-member:hover .team-avatar {
     transform: none;
   }
   .faq-a {
     transition: none;
-  }
-  .statement-text span {
-    opacity: 1 !important;
   }
 }

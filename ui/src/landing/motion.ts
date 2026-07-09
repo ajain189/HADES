@@ -5,15 +5,20 @@ import { useEffect } from "react";
 
 gsap.registerPlugin(ScrollTrigger);
 
+/* This site's scroll animations (reveals, parallax, hero drift, panel grow, smooth scroll) are
+ * ALL user-scroll-driven — nothing autoplays, nothing surprises the user with motion they didn't
+ * initiate. Per WCAG that class of motion is safe under prefers-reduced-motion (the user controls
+ * it by scrolling), and this site's whole experience IS the scroll motion — suppressing it left
+ * the page dead for anyone with Reduce Motion on. So the scroll system always runs. Only genuine
+ * AUTOPLAY / looping motion (the step-word weight sweep, the CSS load-entrance keyframes) respects
+ * the setting — that is what REDUCED now gates, nothing scroll-driven. */
 export const REDUCED =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* Lenis smooth scroll wired into GSAP's ticker (the canonical pairing): one instance for the
- * whole site. A gentle lerp + a long, soft-tail easing gives the slow-motion, glide-to-rest
- * feel. Native scroll (no smoothing, no hijack) under reduced motion. */
+ * whole site. A gentle lerp + a long, soft-tail easing gives the slow-motion, glide-to-rest feel. */
 export function useSmoothScroll() {
   useEffect(() => {
-    if (REDUCED) return;
     const lenis = new Lenis({
       lerp: 0.085, // lower = longer glide; the slow-motion feel
       wheelMultiplier: 0.9,
@@ -56,36 +61,6 @@ export function useReveals(deps: unknown[] = []) {
   useEffect(() => {
     const els = gsap.utils.toArray<HTMLElement>("[data-reveal]");
     if (els.length === 0) return;
-    // Under reduced motion we DON'T kill the reveal to a static state — that left the page
-    // lifeless (and, worse, depended on other scroll animations that share this gate). Instead,
-    // every element still reveals on scroll, but as an OPACITY-ONLY fade: no translate, no blur,
-    // no scale. This respects the intent of the setting (zero positional/vestibular motion) while
-    // the content still animates in, exactly the Cubo approach. Content is never left hidden.
-    if (REDUCED) {
-      const tweens = els.map((el) => {
-        const aboveFold = el.getBoundingClientRect().top < window.innerHeight * 0.9;
-        if (aboveFold) {
-          return gsap.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6, ease: "none", delay: 0.1 });
-        }
-        return gsap.fromTo(
-          el,
-          { autoAlpha: 0 },
-          {
-            autoAlpha: 1,
-            duration: 0.5,
-            ease: "none",
-            scrollTrigger: { trigger: el, start: "top 92%", toggleActions: "play none none none", once: true },
-          },
-        );
-      });
-      ScrollTrigger.refresh();
-      return () => {
-        tweens.forEach((t) => {
-          t.scrollTrigger?.kill();
-          t.kill();
-        });
-      };
-    }
     const vh = window.innerHeight;
     const tweens = els.map((el) => {
       const dir = el.getAttribute("data-reveal") || "up";
@@ -143,7 +118,6 @@ export function useReveals(deps: unknown[] = []) {
  * drifts +/- that fraction of the viewport as it crosses it, scrubbed to scroll. */
 export function useParallax(deps: unknown[] = []) {
   useEffect(() => {
-    if (REDUCED) return;
     const els = gsap.utils.toArray<HTMLElement>("[data-parallax]");
     const tweens = els.map((el) => {
       const amount = (parseFloat(el.getAttribute("data-parallax") || "0.08") || 0.08) * window.innerHeight;
@@ -172,7 +146,6 @@ export function useParallax(deps: unknown[] = []) {
  * on the way up). Any [data-grow] element scales from 0.92 -> 1 across its entrance. */
 export function usePanelGrow(deps: unknown[] = []) {
   useEffect(() => {
-    if (REDUCED) return;
     const els = gsap.utils.toArray<HTMLElement>("[data-grow]");
     const tweens = els.map((el) =>
       gsap.fromTo(

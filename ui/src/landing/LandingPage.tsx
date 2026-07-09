@@ -2,7 +2,7 @@ import { ArrowRight, ArrowUpRight, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { BeforeAfter } from "./BeforeAfter";
-import { gsap, REDUCED, ScrollTrigger, usePanelGrow, useParallax, useReveals, useSmoothScroll } from "./motion";
+import { gsap, ScrollTrigger, usePanelGrow, useParallax, useReveals, useSmoothScroll } from "./motion";
 
 /* HADES demonstration site v3. One family (Archivo), one accent (the logo teal), warm
  * tinted neutrals, and a static floating-drone hero (Cubo grammar: the product sits centered
@@ -103,10 +103,9 @@ function Hero() {
   const copyRef = useRef<HTMLDivElement>(null);
 
   // Scroll-linked parallax across the hero's own scroll span: the drone lags DOWN (+y), the copy
-  // leads UP (-y). Continuous + reversible (tracks scroll both directions), the one motion that
-  // stays live under reduced motion because it is user-scroll-driven, not decorative autoplay.
+  // leads UP (-y). Continuous + reversible (tracks scroll both directions). User-scroll-driven, so
+  // it always runs (see the motion.ts note on why scroll motion is not reduced-motion-gated).
   useEffect(() => {
-    if (REDUCED) return;
     const drone = droneRef.current;
     const copy = copyRef.current;
     if (!drone || !copy) return;
@@ -159,7 +158,7 @@ function Statement() {
   const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el || REDUCED) return;
+    if (!el) return;
     const words = el.querySelectorAll<HTMLElement>("span");
     const tween = gsap.fromTo(
       words,
@@ -404,10 +403,6 @@ function Metric({ m }: { m: (typeof METRICS)[number] }) {
   useEffect(() => {
     const el = numRef.current;
     if (!el) return;
-    if (REDUCED) {
-      el.textContent = m.fmt(m.value);
-      return;
-    }
     const state = { v: 0 };
     const tween = gsap.to(state, {
       v: m.value,
