@@ -15,23 +15,41 @@ gsap.registerPlugin(ScrollTrigger);
 export const REDUCED =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/* the live Lenis instance, so scrollToTop() below can drive Lenis's OWN scroll position (a plain
+ * window.scrollTo does not sync with Lenis and gets snapped back). */
+let lenisInstance: Lenis | null = null;
+
+/* Jump to the very top instantly. Used on reload and on route change so the new view always starts
+ * at the top. Drives Lenis if present (its internal position), and window as a fallback. */
+export function scrollToTop() {
+  if (lenisInstance) lenisInstance.scrollTo(0, { immediate: true });
+  window.scrollTo(0, 0);
+}
+
 /* Lenis smooth scroll wired into GSAP's ticker (the canonical pairing): one instance for the
  * whole site. A gentle lerp + a long, soft-tail easing gives the slow-motion, glide-to-rest feel. */
 export function useSmoothScroll() {
   useEffect(() => {
+    // Never restore the previous scroll position on reload (Cmd+R). We always start at the top,
+    // and Lenis manages scroll anyway, so browser scroll restoration only fights us.
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     const lenis = new Lenis({
       lerp: 0.085, // lower = longer glide; the slow-motion feel
       wheelMultiplier: 0.9,
       // an expo-out tail: quick to respond, long soft settle. Wheel/keys still work natively.
       easing: (t: number) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t)),
     });
+    lenisInstance = lenis;
     lenis.on("scroll", ScrollTrigger.update);
     const raf = (time: number) => lenis.raf(time * 1000);
     gsap.ticker.add(raf);
     gsap.ticker.lagSmoothing(0);
+    // a fresh load always starts at the top (before the first paint the browser may have jumped)
+    scrollToTop();
     return () => {
       gsap.ticker.remove(raf);
       lenis.destroy();
+      lenisInstance = null;
     };
   }, []);
 }

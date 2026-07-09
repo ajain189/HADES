@@ -2,7 +2,7 @@ import { ArrowRight, ArrowUpRight, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { BeforeAfter } from "./BeforeAfter";
-import { gsap, ScrollTrigger, usePanelGrow, useParallax, useReveals, useSmoothScroll } from "./motion";
+import { gsap, ScrollTrigger, scrollToTop, usePanelGrow, useParallax, useReveals, useSmoothScroll } from "./motion";
 
 /* HADES demonstration site v3. One family (Archivo), one accent (the logo teal), warm
  * tinted neutrals, and a static floating-drone hero (Cubo grammar: the product sits centered
@@ -25,12 +25,18 @@ export function LandingPage() {
   useEffect(() => {
     const onHash = () => {
       ScrollTrigger.getAll().forEach((t) => t.kill());
-      window.scrollTo(0, 0);
+      // switching sections always lands at the top of the new page (drives Lenis, not just window)
+      scrollToTop();
       setRoute(parseRoute());
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+  // after the new route's DOM is in place, pin it to the top again (the new page may be taller /
+  // reveals re-arm, so a single pre-render scroll isn't always enough)
+  useEffect(() => {
+    scrollToTop();
+  }, [route]);
   useReveals([route]);
   useParallax([route]);
   usePanelGrow([route]);
