@@ -50,3 +50,8 @@ datasets/
 # ---- Stray non-project files ----
 cs1.pdf
 .gstack/
+.vercel
+
+# personal Claude Code settings + local deploy state
+.claude/settings.local.json
+.claude/.deploy-state/
