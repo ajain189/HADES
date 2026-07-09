@@ -52,6 +52,21 @@ cs1.pdf
 .gstack/
 .vercel
 
-# personal Claude Code settings + local deploy state
-.claude/settings.local.json
-.claude/.deploy-state/
+# ---- Claude / AI assistant files (kept on disk, out of the repo) ----
+# the whole Claude working dir (config, memory, deploy script, state)
+.claude/
+# Claude project + working notes
+CLAUDE.md
+tasks/
+# any root-level markdown that isn't the README (keeps docs/ tracked, ignores stray notes)
+/*.md
+!/README.md
+# other AI / assistant tool dirs and files
+.cursor/
+.cursorrules
+.aider*
+.github/copilot-instructions.md
+.continue/
+.codeium/
+.windsurf/
+*.ai.md
