@@ -568,13 +568,13 @@ function Faq() {
 }
 
 /* =================================================================== TEAM */
-/* the student team: face-in-circle avatars + names. Roles kept short and honest; update names/
-   roles here if fuller attribution is wanted. */
+/* the student team: face-in-circle avatars + names. Update names here if fuller attribution is
+   wanted. */
 const TEAM = [
-  { name: "Aarush Jain", role: "Detection & localization", img: "aarush.png" },
-  { name: "Ryan", role: "Airframe & avionics", img: "ryan.png" },
-  { name: "Soham", role: "Systems & integration", img: "soham.png" },
-  { name: "Andy", role: "Coordinator interface", img: "andy.png" },
+  { name: "Aarush Jain", img: "aarush.png" },
+  { name: "Ryan", img: "ryan.png" },
+  { name: "Soham", img: "soham.png" },
+  { name: "Andy", img: "andy.png" },
 ];
 function Team() {
   return (
@@ -600,7 +600,6 @@ function Team() {
                 <img src={A(`team/${m.img}`)} alt={m.name} loading="lazy" />
               </span>
               <strong className="team-name">{m.name}</strong>
-              <span className="team-role">{m.role}</span>
             </li>
           ))}
         </ul>

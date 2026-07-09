@@ -171,16 +171,16 @@
   text-align: center;
   width: min(1000px, 100%);
 }
-/* the wordmark sits large and low-contrast BEHIND the drone (the drone overlaps its lower half),
- * so the lockup reads as one object floating over the brand */
+/* the wordmark sits above the drone with clean breathing room — no overlap. The drone is the
+ * focal object; the wordmark anchors the brand above it. */
 .hero-word {
   font-family: "Urbanist Variable", "Urbanist", sans-serif;
-  font-size: clamp(72px, 15vw, 240px);
+  font-size: clamp(64px, 12vw, 200px);
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 0.82;
+  line-height: 0.9;
   color: var(--ink);
-  margin-bottom: clamp(-64px, -6vw, -28px);
+  margin-bottom: clamp(16px, 3vh, 40px);
   animation: hero-rise 1s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
 }
 /* the floating airframe: a static PNG on the matching bg + a soft drop-shadow for lift. Never
