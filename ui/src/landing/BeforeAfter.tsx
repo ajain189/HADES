@@ -9,17 +9,20 @@ const BASE = import.meta.env.BASE_URL ?? "/";
 
 export function BeforeAfter() {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState(50);
+  // starts biased toward the unaided side; the scroll-in sweep opens it to reveal the HADES contacts
+  const [pos, setPos] = useState(62);
   const dragging = useRef(false);
   // once the user touches/keys the slider, the auto-sweep may never write pos again: a ref
   // (not a closure flag) so an already-queued rAF tick can't race a pointer interaction
   const interacted = useRef(false);
 
-  // one slow auto-sweep (35% → 62%) as the block scrolls into view, so the effect is legible
-  // before the user ever touches it.
+  // Auto-sweep the divider across as the block scrolls into view, so the reveal reads without any
+  // interaction (the behavior the user saw on mobile). It is scroll-driven — it plays only when
+  // you scroll it into view — so it runs regardless of prefers-reduced-motion, like the rest of
+  // the site's scroll motion. A clear right→left→settle sweep (58 → 30 → 46) shows both halves.
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!el) return;
     let raf = 0;
     const io = new IntersectionObserver(
       ([entry]) => {
@@ -28,15 +31,18 @@ export function BeforeAfter() {
         const t0 = performance.now();
         const tick = (t: number) => {
           if (interacted.current) return;
-          const k = Math.min(1, (t - t0) / 2200);
-          // easeInOutCubic
-          const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-          setPos(35 + e * 27);
+          const k = Math.min(1, (t - t0) / 2600);
+          const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; // easeInOutCubic
+          // sweep the divider LEFT to expose the HADES-contacts side (pos 62 → 30), then ease back
+          // to a balanced ~48 rest — a clear there-and-back reveal that shows both halves.
+          const dip = Math.sin(e * Math.PI); // 0 at start/end, 1 at mid
+          const path = 62 - dip * 32 - e * 14; // 62 -> ~16 at mid -> 48 at rest
+          setPos(path);
           if (k < 1) raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
       },
-      { threshold: 0.45 },
+      { threshold: 0.4 },
     );
     io.observe(el);
     return () => {
